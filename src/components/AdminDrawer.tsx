@@ -1,0 +1,2465 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  X,
+  Lock,
+  Unlock,
+  Sliders,
+  Eye,
+  EyeOff,
+  RotateCcw,
+  Copy,
+  Check,
+  Download,
+  Upload,
+  KeyRound,
+  AlertTriangle,
+  Plus,
+  Trash2,
+  Edit3,
+  Search,
+  Package,
+  Coins,
+  Sparkles,
+  TrendingUp,
+  Users,
+  ShoppingBag,
+  MessageCircle,
+  BarChart3,
+  Activity,
+  Layers,
+  Smartphone,
+  Monitor,
+  Tag,
+  ArrowUpRight,
+  ShieldCheck,
+  Percent,
+  Image as ImageIcon,
+  Flame,
+  LayoutDashboard,
+  Filter,
+  UploadCloud,
+  Globe,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Heart,
+  ExternalLink,
+  FileSpreadsheet,
+  FileCode,
+  FileText,
+  Printer,
+} from 'lucide-react';
+import { useSiteControls, type SiteControlItem } from '../context/SiteControlsContext';
+import { ALL_SIZES, type Product, type Language, type ProductAvailability, type TrendItem } from '../types';
+import {
+  getAggregatedAnalytics,
+  resetAnalyticsData,
+  downloadAnalyticsJSON,
+  downloadAnalyticsCSV,
+  downloadAnalyticsExcel,
+  downloadAnalyticsHTMLReport,
+  downloadAnalyticsMarkdown,
+  syncFromSupabaseCloud,
+  type UserBehaviorStats,
+} from '../lib/analytics';
+import { RECOMMENDED_IMAGE_SPECS } from '../data/trends';
+import { uploadImageToSupabase } from '../lib/storage';
+import ImageUploader from './ImageUploader';
+import AdminAnalyticsDashboard from './AdminAnalyticsDashboard';
+import SocialLinksManager from './SocialLinksManager';
+
+interface Props {
+  lang?: Language;
+}
+
+type TabType = 'analytics' | 'products' | 'banners' | 'social' | 'controls' | 'backup' | 'security';
+
+export default function AdminDrawer({ lang = 'ar' }: Props) {
+  const {
+    controls,
+    toggleVisibility,
+    updateControl,
+    resetControl,
+    resetAllControls,
+    currencyCode,
+    setCurrencyCode,
+    formatPrice,
+    products,
+    loading,
+    error: dbError,
+    isLiveDatabase,
+    lastSyncTime,
+    refreshProducts,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    toggleProductAvailability,
+    resetProductsToDefault,
+    exportAllDataJSON,
+    importAllDataJSON,
+    trendItems,
+    updateTrendItem,
+    resetTrendsToDefault,
+    isAdminOpen,
+    setIsAdminOpen,
+    isAdminUnlocked,
+    unlockAdmin,
+    lockAdmin,
+    setAdminPin,
+    isCloudSynced,
+    syncAllToSupabaseCloud,
+  } = useSiteControls();
+
+  const [activeTab, setActiveTab] = useState<TabType>('analytics');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedJSON, setCopiedJSON] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState(false);
+  const [isUploadingHeroBg, setIsUploadingHeroBg] = useState(false);
+  const [uploadHeroBgSuccess, setUploadHeroBgSuccess] = useState(false);
+  const [uploadingTrendId, setUploadingTrendId] = useState<string | null>(null);
+
+  // Live Analytics Telemetry State
+  const [analyticsStats, setAnalyticsStats] = useState<UserBehaviorStats>(() => getAggregatedAnalytics(products));
+
+  // Lock background page scrollbars completely when Admin Command Center is open
+  useEffect(() => {
+    if (isAdminOpen) {
+      const prevBodyOverflow = document.body.style.overflow;
+      const prevHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+
+      return () => {
+        document.body.style.overflow = prevBodyOverflow;
+        document.documentElement.style.overflow = prevHtmlOverflow;
+      };
+    }
+  }, [isAdminOpen]);
+
+  useEffect(() => {
+    const handleAnalyticsUpdate = () => {
+      setAnalyticsStats(getAggregatedAnalytics(products));
+    };
+    window.addEventListener('vant_analytics_updated', handleAnalyticsUpdate);
+    const interval = setInterval(handleAnalyticsUpdate, 12000);
+    return () => {
+      window.removeEventListener('vant_analytics_updated', handleAnalyticsUpdate);
+      clearInterval(interval);
+    };
+  }, [products]);
+
+  // Catalog CMS State
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [onlyOffersFilter, setOnlyOffersFilter] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | number | null>(null);
+  const [expandedProductIds, setExpandedProductIds] = useState<Set<string | number>>(new Set());
+  const [copiedLinkProductId, setCopiedLinkProductId] = useState<string | number | null>(null);
+
+  // Form State for Add / Edit Product
+  const [formTitleAr, setFormTitleAr] = useState('');
+  const [formTitleEn, setFormTitleEn] = useState('');
+  const [formPrice, setFormPrice] = useState<number>(95000);
+  const [formOriginalPrice, setFormOriginalPrice] = useState<number>(115000);
+  const [formIsOffer, setFormIsOffer] = useState<boolean>(false);
+  const [formOfferBadgeAr, setFormOfferBadgeAr] = useState('عرض خاص');
+  const [formOfferBadgeEn, setFormOfferBadgeEn] = useState('Special Offer');
+  const [formCategory, setFormCategory] = useState('Tailoring');
+  const [formCategoryAr, setFormCategoryAr] = useState('الأزياء الرسمية');
+  const [formImageUrl, setFormImageUrl] = useState('');
+  const [formExtraImages, setFormExtraImages] = useState('');
+  const [formImagesList, setFormImagesList] = useState<string[]>([]);
+  const [formAvailability, setFormAvailability] = useState<ProductAvailability>('in_stock');
+  const [formTags, setFormTags] = useState('');
+  const [formDescAr, setFormDescAr] = useState('');
+  const [formDescEn, setFormDescEn] = useState('');
+  const [formMaterial, setFormMaterial] = useState('');
+  const [formSizes, setFormSizes] = useState<string[]>(['S', 'M', 'L', 'XL']);
+
+  const isAr = lang === 'ar';
+
+  const handleUnlock = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const success = unlockAdmin(passwordInput.trim());
+    if (success) {
+      setPasswordError(false);
+      setPasswordInput('');
+    } else {
+      setPasswordError(true);
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    setIsAddingNew(true);
+    setEditingProduct(null);
+    setFormTitleAr('');
+    setFormTitleEn('');
+    setFormPrice(95000);
+    setFormOriginalPrice(115000);
+    setFormIsOffer(false);
+    setFormOfferBadgeAr('عرض خاص');
+    setFormOfferBadgeEn('Special Offer');
+    setFormCategory('Tailoring');
+    setFormCategoryAr('الأزياء الرسمية');
+    setFormImageUrl('');
+    setFormExtraImages('');
+    setFormImagesList([]);
+    setFormAvailability('in_stock');
+    setFormTags('');
+    setFormDescAr('');
+    setFormDescEn('');
+    setFormMaterial('');
+    setFormSizes(['S', 'M', 'L', 'XL']);
+  };
+
+  const handleOpenEditModal = (p: Product) => {
+    setEditingProduct(p);
+    setIsAddingNew(false);
+    setFormTitleAr(p.title_ar || p.title);
+    setFormTitleEn(p.title);
+    setFormPrice(p.price);
+    setFormOriginalPrice(p.original_price || Math.round(p.price * 1.25));
+    setFormIsOffer(Boolean(p.is_offer));
+    setFormOfferBadgeAr(p.offer_badge_ar || 'عرض خاص');
+    setFormOfferBadgeEn(p.offer_badge_en || 'Special Offer');
+    setFormCategory(p.category);
+    setFormCategoryAr(p.category_ar || p.category);
+    const initialImages = p.images && p.images.length > 0 ? p.images : (p.image_url ? [p.image_url] : []);
+    setFormImageUrl(p.image_url || initialImages[0] || '');
+    setFormExtraImages(initialImages.slice(1).join('\n'));
+    setFormImagesList(initialImages);
+    setFormAvailability(p.availability || 'in_stock');
+    setFormTags((p.tags || []).join(', '));
+    setFormDescAr(p.description_ar || p.description || '');
+    setFormDescEn(p.description || '');
+    setFormMaterial(p.material || '');
+    setFormSizes(p.sizes && p.sizes.length > 0 ? p.sizes : ['S', 'M', 'L', 'XL']);
+  };
+
+  const handleSaveProductForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    const primaryImg = formImageUrl.trim() || formImagesList[0] || '';
+    const allImages = formImagesList.length > 0 ? formImagesList : (primaryImg ? [primaryImg] : []);
+
+    const cleanTags = formTags
+      .split(/[,،]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const productPayload: Omit<Product, 'id'> = {
+      title: formTitleEn.trim() || formTitleAr.trim(),
+      title_ar: formTitleAr.trim() || formTitleEn.trim(),
+      price: Number(formPrice),
+      original_price: formIsOffer ? Number(formOriginalPrice) : undefined,
+      is_offer: formIsOffer,
+      offer_badge_ar: formIsOffer ? formOfferBadgeAr.trim() : undefined,
+      offer_badge_en: formIsOffer ? formOfferBadgeEn.trim() : undefined,
+      category: formCategory.trim(),
+      category_ar: formCategoryAr.trim(),
+      image_url: primaryImg,
+      images: allImages,
+      availability: formAvailability,
+      tags: cleanTags,
+      description: formDescEn.trim(),
+      description_ar: formDescAr.trim(),
+      material: formMaterial.trim(),
+      sizes: formSizes.length > 0 ? formSizes : ['M', 'L'],
+    };
+
+    if (isAddingNew) {
+      addProduct(productPayload);
+    } else if (editingProduct) {
+      updateProduct(editingProduct.id, productPayload);
+    }
+
+    setEditingProduct(null);
+    setIsAddingNew(false);
+  };
+
+  const handleQuickToggleOffer = (p: Product) => {
+    const updatedStatus = !p.is_offer;
+    updateProduct(p.id, {
+      is_offer: updatedStatus,
+      original_price: updatedStatus ? (p.original_price || Math.round(p.price * 1.25)) : undefined,
+      offer_badge_ar: updatedStatus ? (p.offer_badge_ar || 'عرض خاص') : undefined,
+    });
+  };
+
+  const handleSavePassword = () => {
+    if (newPassword.trim().length >= 4) {
+      setAdminPin(newPassword.trim());
+      setPasswordSuccess(true);
+      setTimeout(() => {
+        setPasswordSuccess(false);
+        setNewPassword('');
+      }, 2500);
+    }
+  };
+
+  // Filtered products list
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      if (onlyOffersFilter && !p.is_offer) return false;
+      if (selectedCategoryFilter !== 'all' && p.category !== selectedCategoryFilter) return false;
+      if (productSearch.trim()) {
+        const q = productSearch.toLowerCase().trim();
+        const matchesTitle = p.title.toLowerCase().includes(q) || (p.title_ar && p.title_ar.includes(q));
+        const matchesCat = p.category.toLowerCase().includes(q) || (p.category_ar && p.category_ar.includes(q));
+        const matchesTags = p.tags && p.tags.some((t) => t.toLowerCase().includes(q));
+        return matchesTitle || matchesCat || matchesTags;
+      }
+      return true;
+    });
+  }, [products, productSearch, selectedCategoryFilter, onlyOffersFilter]);
+
+  // Categories list
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach((p) => set.add(p.category));
+    return Array.from(set);
+  }, [products]);
+
+  if (!isAdminOpen) {
+    return null;
+  }
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex flex-col bg-[#08090d] text-[#f3f4f6] overflow-hidden select-none font-sans">
+        {/* Only show top operations command header when authenticated/unlocked */}
+        {isAdminUnlocked ? (
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-[#12151f] px-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#004ad7]/20 border border-[#004ad7]/30 text-[#3b82f6] shadow-sm">
+                <LayoutDashboard className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm sm:text-base font-bold tracking-tight text-white">
+                    {isAr ? 'مركز عمليات دار ڤانت المتكامل' : 'Maison VANT Operations Command Center'}
+                  </h1>
+                  <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {isAr ? 'متصل مباشر' : 'Live Engine'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/50 hidden sm:block">
+                  {isAr
+                    ? 'إدارة العروض والكتالوج، تخصيص البنرات، وتحليل سلوك الزوار المتقدم'
+                    : 'Live Catalog & Offers CMS, Banner Customizer & Deep Behavioral Analytics'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Live Visitors Counter Badge */}
+              <div className="flex items-center gap-1.5 rounded-full bg-white/[0.04] border border-white/10 px-3 py-1 text-xs text-white/80">
+                <Users className="h-3.5 w-3.5 text-[#3b82f6]" />
+                <span className="tabular-nums font-semibold text-white">{analyticsStats.activeOnlineNow}</span>
+                <span className="text-[10px] text-white/50">{isAr ? 'نشط الآن' : 'online'}</span>
+              </div>
+
+              {/* Supabase Cloud Sync Status / Action */}
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsSyncing(true);
+                  await syncAllToSupabaseCloud();
+                  setIsSyncing(false);
+                  setSyncToast(true);
+                  setTimeout(() => setSyncToast(false), 3000);
+                }}
+                title={isAr ? 'مزامنة وحفظ فوري في سوبابيس' : 'Sync with Supabase Cloud'}
+                className="hidden md:flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer"
+              >
+                {isSyncing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-3.5 w-3.5" />
+                )}
+                <span>{isAr ? 'مزامنة السحابة' : 'Cloud Sync'}</span>
+              </button>
+
+              {/* Currency Selector (Direct Supabase Cloud Sync) */}
+              <div className="flex items-center rounded-lg border border-white/10 bg-black/40 p-0.5">
+                {(['د.ع', 'IQD', 'USD'] as const).map((curr) => (
+                  <button
+                    key={curr}
+                    type="button"
+                    onClick={() => setCurrencyCode(curr)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+                      currencyCode === curr
+                        ? 'bg-[#004ad7] text-white shadow-xs'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                    title={isAr ? `تغيير العملة إلى ${curr} ومزامنتها لجميع الزبائن` : `Set currency to ${curr}`}
+                  >
+                    {curr}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={lockAdmin}
+                title={isAr ? 'قفل الجلسة' : 'Lock session'}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+              >
+                <Lock className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAdminOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/70 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-all cursor-pointer"
+                aria-label="Close Command Center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </header>
+        ) : null}
+
+        {/* Locked Screen View (Discreet, Zero Info Leaks, Elegant Exit) */}
+        {!isAdminUnlocked ? (
+          <div className="relative flex flex-1 flex-col items-center justify-center p-4 sm:p-6 text-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#131726] via-[#090b12] to-[#05060a]">
+            {/* Ambient luxury glow ring */}
+            <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 h-96 w-96 rounded-full bg-[#004ad7]/10 blur-3xl" />
+
+            {/* Quick discreet close button for anyone who opened by mistake */}
+            <button
+              type="button"
+              onClick={() => setIsAdminOpen(false)}
+              className="absolute top-4 sm:top-6 ltr:right-4 sm:ltr:right-6 rtl:left-4 sm:rtl:left-6 z-20 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/10 hover:text-white backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+              aria-label={isAr ? 'إغلاق والرجوع للمتجر' : 'Close and return to boutique'}
+              title={isAr ? 'إغلاق والرجوع للمتجر' : 'Close and return to boutique'}
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0 }}
+              animate={passwordError ? { x: [-8, 8, -6, 6, -3, 3, 0] } : { scale: 1, opacity: 1 }}
+              transition={{ duration: 0.35 }}
+              className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#10131d]/90 p-6 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
+            >
+              {/* Shield Icon Badge */}
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-[#004ad7]/25 to-[#004ad7]/5 border border-[#004ad7]/30 text-[#3b82f6] shadow-lg shadow-[#004ad7]/15 mb-4">
+                <ShieldCheck className="h-8 w-8" />
+              </div>
+
+              <h2 className="text-lg font-bold text-white tracking-tight">
+                {isAr ? 'بوابة دار ڤانت · وصول محمي' : 'Maison VANT · Secure Portal'}
+              </h2>
+              <p className="mt-2 text-xs text-white/50 leading-relaxed">
+                {isAr
+                  ? 'هذه المنطقة مخصصة للإدارة، يرجى إدخال رمز التحقق الخاص بك للمتابعة'
+                  : 'Restricted area. Please enter your authorization key to proceed'}
+              </p>
+
+              <form onSubmit={handleUnlock} className="mt-6 space-y-4">
+                <div className="relative flex items-center">
+                  <KeyRound className="pointer-events-none absolute ltr:left-3.5 rtl:right-3.5 h-4 w-4 text-white/40" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      if (passwordError) setPasswordError(false);
+                    }}
+                    placeholder="••••••••"
+                    autoFocus
+                    maxLength={40}
+                    className={`h-12 w-full rounded-2xl border bg-black/60 px-10 text-center text-sm font-mono tracking-widest outline-none transition-all placeholder:text-white/20 ${
+                      passwordError
+                        ? 'border-red-500/80 ring-2 ring-red-500/20 text-red-400'
+                        : 'border-white/15 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 text-white'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute ltr:right-3 rtl:left-3 flex h-7 w-7 items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                    title={showPassword ? 'إخفاء' : 'إظهار'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                {passwordError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-center gap-1.5 text-xs text-red-400 font-medium"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>{isAr ? 'رمز المرور غير صحيح، يرجى المحاولة ثانية' : 'Incorrect credentials, please retry'}</span>
+                  </motion.div>
+                )}
+
+                <button
+                  type="submit"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#004ad7] to-[#2563eb] font-semibold text-xs text-white shadow-lg shadow-[#004ad7]/30 hover:from-[#004ad7]/90 hover:to-[#2563eb]/90 active:scale-98 transition-all cursor-pointer"
+                >
+                  <Unlock className="h-4 w-4" />
+                  <span>{isAr ? 'تأكيد الدخول والمتابعة' : 'Authorize & Continue'}</span>
+                </button>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminOpen(false)}
+                    className="text-[11.5px] font-medium text-white/45 hover:text-white/80 transition-colors cursor-pointer"
+                  >
+                    {isAr ? 'الرجوع إلى المتجر والتشكيلة' : 'Return to Boutique & Collection'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        ) : (
+          /* Unlocked Full-Screen Operations Dashboard */
+          <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
+            {/* Sidebar Command Navigation Tabs */}
+            <aside className="shrink-0 border-b md:border-b-0 md:border-e border-white/10 bg-[#0f121a] p-3 md:w-64 lg:w-72 flex md:flex-col justify-between overflow-x-auto md:overflow-y-auto">
+              <nav className="flex md:flex-col gap-1.5 min-w-max md:min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('analytics')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'analytics'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <BarChart3 className="h-4 w-4 text-[#3b82f6]" />
+                  <span>{isAr ? 'تحليل بيانات وسلوك الزوار' : 'Behavior & Deep Analytics'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('products')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'products'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Package className="h-4 w-4 text-emerald-400" />
+                  <span>{isAr ? 'إدارة الكتالوج والعروض' : 'Catalog & Special Offers'}</span>
+                  {products.some((p) => p.is_offer) && (
+                    <span className="ltr:ml-auto rtl:mr-auto rounded-full bg-rose-500/20 px-1.5 py-0.2 text-[9px] text-rose-300 font-bold">
+                      {products.filter((p) => p.is_offer).length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('banners')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'banners'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <ImageIcon className="h-4 w-4 text-amber-400" />
+                  <span>{isAr ? 'البنرات ونصوص الموقع' : 'Banners & Site Copy Studio'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('social')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'social'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Globe className="h-4 w-4 text-emerald-400" />
+                  <span>{isAr ? 'روابط المنصات والفوتر' : 'Social & Global Links'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('controls')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'controls'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Sliders className="h-4 w-4 text-purple-400" />
+                  <span>{isAr ? 'أزرار الموقع والتواصل' : 'Buttons & Interactive Controls'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('backup')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'backup'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Download className="h-4 w-4 text-cyan-400" />
+                  <span>{isAr ? 'النسخ الاحتياطي والبيانات' : 'Backup & JSON Engine'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('security')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'security'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <KeyRound className="h-4 w-4 text-rose-400" />
+                  <span>{isAr ? 'الأمان وكلمة المرور' : 'Security & Access'}</span>
+                </button>
+              </nav>
+
+              <div className="hidden md:block mt-6 pt-4 border-t border-white/10 text-[11px] text-white/40">
+                <span>VANT Master OS v3.2</span>
+              </div>
+            </aside>
+
+            {/* Main Center Content Viewport */}
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#0c0e15]">
+              {/* TAB 1: DEEP ANALYTICS & USER BEHAVIOR */}
+              {activeTab === 'analytics' && (
+                <div className="space-y-6 max-w-6xl mx-auto">
+                  {/* RECHARTS INTERACTIVE VISUALIZATION DASHBOARD WITH ENGAGEMENT & CTR CHARTS */}
+                  <AdminAnalyticsDashboard
+                    stats={analyticsStats}
+                    products={products}
+                    isAr={isAr}
+                    onRefresh={async () => {
+                      await syncFromSupabaseCloud();
+                      setAnalyticsStats(getAggregatedAnalytics(products));
+                    }}
+                  />
+
+                  {/* Funnel Progression Tracker */}
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-[#3b82f6]" />
+                      <span>{isAr ? 'مسار تجربة وتحويل العميل (Conversion Funnel)' : 'Collector Conversion Funnel'}</span>
+                    </h3>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                      <div className="rounded-xl border border-white/5 bg-black/30 p-3">
+                        <span className="text-[10px] text-white/50 block">{isAr ? '1. تصفح الكتالوج' : '1. Catalog Views'}</span>
+                        <span className="text-lg font-bold text-white tabular-nums mt-1 block">
+                          {analyticsStats.funnel.catalogViews}
+                        </span>
+                        <span className="text-[10px] text-white/40">100%</span>
+                      </div>
+
+                      <div className="rounded-xl border border-white/5 bg-black/30 p-3">
+                        <span className="text-[10px] text-white/50 block">{isAr ? '2. فتح تفاصيل القطعة' : '2. Piece Inspection'}</span>
+                        <span className="text-lg font-bold text-white tabular-nums mt-1 block">
+                          {analyticsStats.funnel.productSheetOpens}
+                        </span>
+                        <span className="text-[10px] text-[#3b82f6]">
+                          {Math.round((analyticsStats.funnel.productSheetOpens / analyticsStats.funnel.catalogViews) * 100)}%
+                        </span>
+                      </div>
+
+                      <div className="rounded-xl border border-white/5 bg-black/30 p-3">
+                        <span className="text-[10px] text-white/50 block">{isAr ? '3. تحديد المقاس' : '3. Size Selected'}</span>
+                        <span className="text-lg font-bold text-white tabular-nums mt-1 block">
+                          {analyticsStats.funnel.sizeSelections}
+                        </span>
+                        <span className="text-[10px] text-purple-400">
+                          {Math.round((analyticsStats.funnel.sizeSelections / analyticsStats.funnel.productSheetOpens) * 100)}%
+                        </span>
+                      </div>
+
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <span className="text-[10px] text-emerald-400 block font-semibold">{isAr ? '4. طلب الواتساب المباشر' : '4. WhatsApp Order'}</span>
+                        <span className="text-lg font-bold text-emerald-400 tabular-nums mt-1 block">
+                          {analyticsStats.funnel.whatsappConversions}
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-bold">
+                          {analyticsStats.conversionRate}% Final
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Demanded Pieces Ranking Table */}
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Flame className="h-4 w-4 text-rose-500" />
+                      <span>{isAr ? 'القطع الأكثر طلباً ومطالعة من العملاء' : 'Most In-Demand Pieces Telemetry'}</span>
+                    </h3>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-start">
+                        <thead>
+                          <tr className="border-b border-white/10 text-white/40 pb-2">
+                            <th className="py-2 px-3 font-semibold">{isAr ? 'الترتيب' : 'Rank'}</th>
+                            <th className="py-2 px-3 font-semibold">{isAr ? 'القطعة' : 'Piece'}</th>
+                            <th className="py-2 px-3 font-semibold text-center">{isAr ? 'المشاهدات' : 'Views'}</th>
+                            <th className="py-2 px-3 font-semibold text-center">{isAr ? 'المفضلة' : 'Wishlist'}</th>
+                            <th className="py-2 px-3 font-semibold text-center">{isAr ? 'طلبات الواتساب' : 'WhatsApp'}</th>
+                            <th className="py-2 px-3 font-semibold text-center">{isAr ? 'معدل الطلب' : 'Conversion'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {analyticsStats.topProducts.map((p, idx) => (
+                            <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                              <td className="py-2.5 px-3 font-mono font-bold text-[#3b82f6]">
+                                #{idx + 1}
+                              </td>
+                              <td className="py-2.5 px-3 font-medium text-white max-w-xs truncate">
+                                {p.title}
+                              </td>
+                              <td className="py-2.5 px-3 text-center tabular-nums text-white/80">
+                                {p.views}
+                              </td>
+                              <td className="py-2.5 px-3 text-center tabular-nums text-rose-400">
+                                {p.wishlistAdds}
+                              </td>
+                              <td className="py-2.5 px-3 text-center tabular-nums text-emerald-400 font-bold">
+                                {p.whatsappClicks}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+                                  {p.conversionPct}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Customer Searches & Devices Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Search Queries Telemetry */}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Search className="h-4 w-4 text-amber-400" />
+                        <span>{isAr ? 'كلمات البحث الأكثر تكراراً من الزوار' : 'Top Search Queries'}</span>
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {analyticsStats.popularSearches.map((s, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-white"
+                          >
+                            <span className="font-medium">{s.term}</span>
+                            <span className="rounded-full bg-[#004ad7]/20 px-1.5 py-0.2 text-[10px] text-[#3b82f6] font-mono">
+                              {s.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Device & Client Breakdown */}
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Smartphone className="h-4 w-4 text-purple-400" />
+                        <span>{isAr ? 'توزيع الأجهزة المستخدمة' : 'Device Distribution'}</span>
+                      </h3>
+                      <div className="space-y-2.5 text-xs">
+                        <div>
+                          <div className="flex justify-between text-white/70 mb-1">
+                            <span>الهاتف الذكي (Mobile - iOS/Android)</span>
+                            <span className="font-bold text-white tabular-nums">{analyticsStats.deviceBreakdown.mobile}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-black/50 overflow-hidden">
+                            <div className="h-full bg-[#004ad7] rounded-full" style={{ width: `${analyticsStats.deviceBreakdown.mobile}%` }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-white/70 mb-1">
+                            <span>أجهزة سطح المكتب (Desktop / Mac)</span>
+                            <span className="font-bold text-white tabular-nums">{analyticsStats.deviceBreakdown.desktop}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-black/50 overflow-hidden">
+                            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${analyticsStats.deviceBreakdown.desktop}%` }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-white/70 mb-1">
+                            <span>الأجهزة اللوحية (Tablet / iPad)</span>
+                            <span className="font-bold text-white tabular-nums">{analyticsStats.deviceBreakdown.tablet}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-black/50 overflow-hidden">
+                            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${analyticsStats.deviceBreakdown.tablet}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: CATALOG & SPECIAL OFFERS CMS */}
+              {activeTab === 'products' && (
+                <div className="space-y-6 max-w-6xl mx-auto">
+                  {/* Top Bar with Add and Filters */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                    <div>
+                      <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Package className="h-5 w-5 text-emerald-400" />
+                        <span>{isAr ? 'إدارة الكتالوج والعروض والتخفيضات' : 'Catalog & Special Offers CMS'}</span>
+                      </h2>
+                      <p className="text-xs text-white/60 mt-0.5">
+                        {isAr
+                          ? `إجمالي القطع في المعرض: ${products.length} قطعة (${products.filter((p) => p.is_offer).length} عروض خاصة نشطة)`
+                          : `Total pieces: ${products.length} (${products.filter((p) => p.is_offer).length} active offers)`}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {syncToast && (
+                        <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg animate-fade-in">
+                          {isAr ? '✓ تم تحديث ومزامنة البيانات مع Supabase' : '✓ Synced with Supabase'}
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleOpenAddModal}
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 transition-all cursor-pointer active:scale-95"
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>{isAr ? 'إضافة قطعة جديدة' : 'Add New Piece'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSyncing}
+                        onClick={async () => {
+                          setIsSyncing(true);
+                          await refreshProducts();
+                          setIsSyncing(false);
+                          setSyncToast(true);
+                          setTimeout(() => setSyncToast(false), 3000);
+                        }}
+                        title={isAr ? 'مزامنة مع قاعدة البيانات السحابية Supabase' : 'Sync with Supabase'}
+                        className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <RotateCcw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin text-[#3b82f6]' : ''}`} />
+                        <span className="hidden sm:inline">
+                          {isSyncing ? (isAr ? 'جارِ المزامنة...' : 'Syncing...') : (isAr ? 'مزامنة Supabase' : 'Sync Supabase')}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search & Filter Controls Bar */}
+                  <div className="flex flex-wrap items-center gap-2.5 bg-white/[0.03] border border-white/10 rounded-2xl p-3">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="absolute ltr:left-3 rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                      <input
+                        type="text"
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        placeholder={isAr ? 'بحث بالاسم، الخامة، أو الوسم...' : 'Search pieces by title, fabric, tags...'}
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black/40 ltr:pl-9 rtl:pr-9 ltr:pr-3 rtl:pl-3 text-xs text-white placeholder-white/40 outline-none focus:border-[#3b82f6]"
+                      />
+                    </div>
+
+                    {/* Offers Only Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setOnlyOffersFilter(!onlyOffersFilter)}
+                      className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition-all cursor-pointer ${
+                        onlyOffersFilter
+                          ? 'bg-rose-500/20 border-rose-500 text-rose-300 shadow-xs'
+                          : 'border-white/10 bg-black/30 text-white/60 hover:text-white'
+                      }`}
+                    >
+                      <Tag className="h-3.5 w-3.5" />
+                      <span>{isAr ? 'عروض وتخفيضات فقط' : 'Offers Only'}</span>
+                    </button>
+
+                    {/* Category Filter Dropdown */}
+                    <select
+                      value={selectedCategoryFilter}
+                      onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                      className="h-10 rounded-xl border border-white/10 bg-black/40 px-3 text-xs text-white outline-none cursor-pointer"
+                    >
+                      <option value="all">{isAr ? 'كافة الأقسام' : 'All Categories'}</option>
+                      {availableCategories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Products Grid List */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {filteredProducts.map((p) => {
+                      const displayTitle = isAr && p.title_ar ? p.title_ar : p.title;
+                      const isExpanded = expandedProductIds.has(p.id);
+                      const allImages = p.images && p.images.length > 0 ? p.images : [p.image_url];
+                      
+                      // Calculate piece-specific live engagement from analyticsStats
+                      const pieceStats = analyticsStats.topProducts.find((tp) => String(tp.id) === String(p.id)) || {
+                        views: 0,
+                        wishlistAdds: 0,
+                        whatsappClicks: 0,
+                        conversionPct: 0,
+                      };
+
+                      // Calculate Discount & Margin
+                      const discountAmount = p.is_offer && p.original_price ? p.original_price - p.price : 0;
+                      const discountPct = p.is_offer && p.original_price && p.original_price > 0
+                        ? Math.round((discountAmount / p.original_price) * 100)
+                        : 0;
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`rounded-2xl border transition-all flex flex-col justify-between ${
+                            isExpanded
+                              ? 'border-[#004ad7]/60 bg-[#12151f] shadow-2xl md:col-span-2 lg:col-span-3'
+                              : 'border-white/10 bg-white/[0.025] hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <div className="p-3.5">
+                            {/* Card Header & Summary */}
+                            <div className="flex gap-3">
+                              {/* Thumbnail */}
+                              <div
+                                onClick={() => {
+                                  const next = new Set(expandedProductIds);
+                                  if (isExpanded) next.delete(p.id);
+                                  else next.add(p.id);
+                                  setExpandedProductIds(next);
+                                }}
+                                className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/40 cursor-pointer group"
+                              >
+                                <img
+                                  src={p.image_url}
+                                  alt={displayTitle}
+                                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                />
+                                {p.is_offer && (
+                                  <span className="absolute top-1 ltr:left-1 rtl:right-1 rounded-md bg-rose-600 px-1 py-0.2 text-[8px] font-bold text-white shadow-xs">
+                                    {p.offer_badge_ar || 'خصم'}
+                                  </span>
+                                )}
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[9px] font-bold">
+                                  {isExpanded ? (isAr ? 'طي ▴' : 'Collapse') : (isAr ? 'توسيع ▾' : 'Expand')}
+                                </div>
+                              </div>
+
+                              {/* Details */}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-1">
+                                  <h4
+                                    onClick={() => {
+                                      const next = new Set(expandedProductIds);
+                                      if (isExpanded) next.delete(p.id);
+                                      else next.add(p.id);
+                                      setExpandedProductIds(next);
+                                    }}
+                                    className="text-xs font-bold text-white truncate cursor-pointer hover:text-[#3b82f6] transition-colors"
+                                    title={displayTitle}
+                                  >
+                                    {displayTitle}
+                                  </h4>
+
+                                  {/* Quick Expand Toggle Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = new Set(expandedProductIds);
+                                      if (isExpanded) next.delete(p.id);
+                                      else next.add(p.id);
+                                      setExpandedProductIds(next);
+                                    }}
+                                    className="text-white/40 hover:text-white transition-colors"
+                                  >
+                                    {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                  </button>
+                                </div>
+                                <span className="text-[10px] text-white/50 block font-mono">
+                                  {p.category}
+                                </span>
+
+                                <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
+                                  <span className={`text-xs font-bold ${p.is_offer ? 'text-rose-400' : 'text-[#3b82f6]'}`}>
+                                    {formatPrice(p.price)}
+                                  </span>
+                                  {p.is_offer && p.original_price && (
+                                    <span className="text-[10px] line-through text-white/40">
+                                      {formatPrice(p.original_price)}
+                                    </span>
+                                  )}
+                                  {p.is_offer && discountPct > 0 && (
+                                    <span className="rounded bg-rose-500/20 px-1 py-0.2 text-[9px] font-bold text-rose-300">
+                                      -{discountPct}%
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="mt-1 flex items-center justify-between">
+                                  <div className="flex items-center gap-1">
+                                    <span
+                                      className={`inline-block h-1.5 w-1.5 rounded-full ${
+                                        p.availability === 'sold_out'
+                                          ? 'bg-rose-500'
+                                          : p.availability === 'coming_soon'
+                                          ? 'bg-amber-400'
+                                          : 'bg-emerald-400'
+                                      }`}
+                                    />
+                                    <span className="text-[10px] text-white/60">
+                                      {p.availability === 'sold_out'
+                                        ? isAr ? 'منتهي' : 'Sold Out'
+                                        : p.availability === 'coming_soon'
+                                        ? isAr ? 'قريباً' : 'Coming'
+                                        : isAr ? 'متوفر' : 'In Stock'}
+                                    </span>
+                                  </div>
+
+                                  {/* Quick stats counter */}
+                                  <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
+                                    <span>👁️ {pieceStats.views}</span>
+                                    <span>💬 {pieceStats.whatsappClicks}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ========================================================= */}
+                            {/* EXPANDED RICH DETAILS SECTION (Visible when clicked) */}
+                            {/* ========================================================= */}
+                            {isExpanded && (
+                              <div className="mt-4 pt-4 border-t border-white/10 space-y-4 animate-fade-in">
+                                {/* 1. Piece Multi-Angle Gallery Thumbnails */}
+                                <div>
+                                  <span className="text-[11px] font-bold text-white/70 block mb-2">
+                                    {isAr ? `معرض صور القطعة (${allImages.length} صور مرفوعة)` : `Gallery Angles (${allImages.length} images)`}
+                                  </span>
+                                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                    {allImages.map((img, imgIdx) => (
+                                      <a
+                                        key={imgIdx}
+                                        href={img}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="relative h-16 w-16 shrink-0 rounded-xl overflow-hidden border border-white/10 hover:border-[#3b82f6] transition-all"
+                                      >
+                                        <img src={img} alt="" className="h-full w-full object-cover" />
+                                        <span className="absolute bottom-0.5 ltr:right-0.5 rtl:left-0.5 rounded bg-black/70 px-1 text-[8px] text-white/80 font-mono">
+                                          #{imgIdx + 1}
+                                        </span>
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* 2. Piece Live Analytics & CTR Breakdown */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                  <div className="rounded-xl border border-white/10 bg-black/40 p-2.5 text-center">
+                                    <span className="text-[10px] text-white/50 block">{isAr ? 'المشاهدات' : 'Views'}</span>
+                                    <span className="text-sm font-bold text-[#3b82f6] font-mono tabular-nums">{pieceStats.views}</span>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-black/40 p-2.5 text-center">
+                                    <span className="text-[10px] text-white/50 block">{isAr ? 'المفضلة' : 'Wishlist'}</span>
+                                    <span className="text-sm font-bold text-rose-400 font-mono tabular-nums">{pieceStats.wishlistAdds}</span>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-black/40 p-2.5 text-center">
+                                    <span className="text-[10px] text-white/50 block">{isAr ? 'طلبات الواتساب' : 'WhatsApp'}</span>
+                                    <span className="text-sm font-bold text-emerald-400 font-mono tabular-nums">{pieceStats.whatsappClicks}</span>
+                                  </div>
+                                  <div className="rounded-xl border border-white/10 bg-black/40 p-2.5 text-center">
+                                    <span className="text-[10px] text-white/50 block">{isAr ? 'نسبة النقر (CTR)' : 'CTR %'}</span>
+                                    <span className="text-sm font-bold text-amber-400 font-mono tabular-nums">{pieceStats.conversionPct}%</span>
+                                  </div>
+                                </div>
+
+                                {/* 3. Sizing, Fabric, and Descriptions */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                  <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-1.5">
+                                    <span className="text-[11px] font-bold text-white/60 block">{isAr ? 'المقاسات المتاحة:' : 'Sizes:'}</span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {(p.sizes || ['S', 'M', 'L', 'XL']).map((sz) => (
+                                        <span key={sz} className="rounded-lg bg-white/10 border border-white/10 px-2 py-0.5 text-[11px] font-bold font-mono text-white">
+                                          {sz}
+                                        </span>
+                                      ))}
+                                    </div>
+
+                                    {p.material && (
+                                      <div className="pt-1 text-[11px] text-white/70">
+                                        <span className="text-white/40">{isAr ? 'الخامة والقماش: ' : 'Fabric: '}</span>
+                                        <span className="font-medium text-white">{p.material}</span>
+                                      </div>
+                                    )}
+
+                                    {p.tags && p.tags.length > 0 && (
+                                      <div className="flex items-center gap-1 flex-wrap pt-1">
+                                        {p.tags.map((t) => (
+                                          <span key={t} className="rounded-md bg-[#004ad7]/15 text-[#3b82f6] px-1.5 py-0.2 text-[10px]">
+                                            #{t}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-1">
+                                    <span className="text-[11px] font-bold text-white/60 block">{isAr ? 'الوصف والتفاصيل:' : 'Description:'}</span>
+                                    <p className="text-[11px] text-white/80 line-clamp-3 leading-relaxed">
+                                      {isAr ? p.description_ar || p.description || 'لا يوجد وصف مخصص' : p.description || p.description_ar}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* 4. Quick Action Utilities */}
+                                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(`${window.location.origin}/?product=${p.id}`);
+                                      setCopiedLinkProductId(p.id);
+                                      setTimeout(() => setCopiedLinkProductId(null), 2000);
+                                    }}
+                                    className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs text-white hover:bg-white/10 transition-all cursor-pointer"
+                                  >
+                                    {copiedLinkProductId === p.id ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    <span>{copiedLinkProductId === p.id ? (isAr ? 'تم نسخ الرابط!' : 'Copied!') : (isAr ? 'نسخ رابط القطعة' : 'Copy Link')}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newPayload: Omit<Product, 'id'> = {
+                                        title: `${p.title} (Copy)`,
+                                        title_ar: p.title_ar ? `${p.title_ar} (نسخة)` : undefined,
+                                        price: p.price,
+                                        original_price: p.original_price,
+                                        is_offer: p.is_offer,
+                                        offer_badge_ar: p.offer_badge_ar,
+                                        offer_badge_en: p.offer_badge_en,
+                                        category: p.category,
+                                        category_ar: p.category_ar,
+                                        image_url: p.image_url,
+                                        images: p.images,
+                                        availability: p.availability,
+                                        tags: p.tags,
+                                        description: p.description,
+                                        description_ar: p.description_ar,
+                                        material: p.material,
+                                        sizes: p.sizes,
+                                      };
+                                      addProduct(newPayload);
+                                    }}
+                                    className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs text-white hover:bg-white/10 transition-all cursor-pointer"
+                                  >
+                                    <Plus className="h-3.5 w-3.5 text-purple-400" />
+                                    <span>{isAr ? 'استنساخ القطعة' : 'Duplicate Piece'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Quick Action Footer Buttons */}
+                          <div className="p-3.5 pt-2 border-t border-white/10 flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1">
+                              {/* Toggle Offer Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleQuickToggleOffer(p)}
+                                title={isAr ? 'تبديل حالة العرض الخاص' : 'Toggle Special Offer'}
+                                className={`rounded-lg px-2 py-1 text-[10px] font-semibold border transition-all cursor-pointer ${
+                                  p.is_offer
+                                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                                    : 'border-white/10 bg-white/[0.04] text-white/60 hover:text-white'
+                                }`}
+                              >
+                                {p.is_offer ? (isAr ? 'عرض نشط' : 'Offer ON') : (isAr ? '+ عرض' : 'Set Offer')}
+                              </button>
+
+                              {/* Toggle Availability Quick Selector */}
+                              <select
+                                value={p.availability || 'in_stock'}
+                                onChange={(e) => toggleProductAvailability(p.id, e.target.value as ProductAvailability)}
+                                className="h-7 rounded-lg border border-white/10 bg-black/40 px-1 text-[10px] text-white outline-none cursor-pointer"
+                              >
+                                <option value="in_stock">{isAr ? 'متوفر' : 'Stock'}</option>
+                                <option value="sold_out">{isAr ? 'منتهي' : 'Sold'}</option>
+                                <option value="coming_soon">{isAr ? 'قريباً' : 'Soon'}</option>
+                              </select>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(p)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-white/80 hover:bg-[#004ad7] hover:text-white transition-all cursor-pointer"
+                                title={isAr ? 'تعديل كامل' : 'Edit Piece'}
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(isAr ? `هل أنت متأكد من حذف قطعة "${displayTitle}"؟` : `Delete product "${p.title}"?`)) {
+                                    deleteProduct(p.id);
+                                  }
+                                }}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                                title={isAr ? 'حذف القطعة' : 'Delete Piece'}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: BANNERS & SITE COPY STUDIO */}
+              {activeTab === 'banners' && (
+                <div className="space-y-6 max-w-4xl mx-auto">
+                  <div className="pb-2 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <ImageIcon className="h-5 w-5 text-amber-400" />
+                        <span>{isAr ? 'استوديو تعديل البنرات والوسائط ومقاسات الصور' : 'Banners, Media & Image Specs Studio'}</span>
+                      </h2>
+                      <p className="text-xs text-white/60 mt-0.5">
+                        {isAr
+                          ? 'تعديل صور وبنرات الموقع مع دليل المقاسات الهندسية الدقيقة للظهور بأعلى دقة وفخامة'
+                          : 'Customize hero backdrops & trend cards with exact image dimension specs'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={resetTrendsToDefault}
+                      className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                    >
+                      {isAr ? 'استعادة التريندات الافتراضية' : 'Reset Default Trends'}
+                    </button>
+                  </div>
+
+                  {/* HIGH-FASHION IMAGE DIMENSIONS SPECIFICATION GUIDE */}
+                  <div className="rounded-3xl border border-amber-500/25 bg-gradient-to-b from-amber-500/10 via-black/40 to-black/60 p-5 sm:p-6 backdrop-blur-md shadow-xl">
+                    <div className="flex items-center gap-2.5 mb-3 text-amber-400">
+                      <Sparkles className="h-5 w-5" />
+                      <h3 className="text-sm font-bold tracking-wide uppercase">
+                        {isAr ? 'دليل المقاسات والأبعاد المثالية للصور (Image Dimension Specifications)' : 'Master Image Sizing & Aspect Ratio Specs'}
+                      </h3>
+                    </div>
+                    <p className="text-xs text-white/70 leading-relaxed mb-4">
+                      {isAr
+                        ? 'لضمان ظهور الصور بأعلى نقاوة وفخامة معمارية دون تشويه أو اقتصاص غير مرغوب، يرجى الالتزام بالأبعاد التالية عند تصميم أو اختيار الصور:'
+                        : 'To maintain pristine editorial visual fidelity, adhere to the recommended pixel dimensions and ratios:'}
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Spec 1: Hero Banner */}
+                      <div className="rounded-2xl border border-white/10 bg-black/50 p-3.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-amber-400" />
+                            {isAr ? 'خلفية البنر الترحيبي العريض' : 'Welcome Hero Background'}
+                          </span>
+                          <span className="rounded-md bg-amber-400/20 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300">
+                            1920 × 600 px
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-white/50 block font-mono">النسبة: 16:5 (أفقي بانورامي عريض)</span>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          {isAr ? 'صورة أفقية عريضة تغطي خلفية الترويسة بالكامل مع المحافظة على وضوح الخط' : 'Ultra-wide landscape banner backdrop'}
+                        </p>
+                      </div>
+
+                      {/* Spec 2: Trend Cards */}
+                      <div className="rounded-2xl border border-white/10 bg-black/50 p-3.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-[#3b82f6]" />
+                            {isAr ? 'كروت تريندات موسم 2026' : 'Seasonal Trend Cards'}
+                          </span>
+                          <span className="rounded-md bg-[#3b82f6]/20 px-2 py-0.5 text-[10px] font-mono font-bold text-[#3b82f6]">
+                            800 × 1000 px
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-white/50 block font-mono">النسبة: 4:5 (عمودي بورتريه أزياء)</span>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          {isAr ? 'تناسق طولي فاخر لإبراز قصات وتفاصيل المعاطف والتريكو والأقمشة' : 'Vertical fashion portrait ratio'}
+                        </p>
+                      </div>
+
+                      {/* Spec 3: Product Primary */}
+                      <div className="rounded-2xl border border-white/10 bg-black/50 p-3.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                            {isAr ? 'صورة القطعة الرئيسية بالكتالوج' : 'Catalog Primary Product'}
+                          </span>
+                          <span className="rounded-md bg-emerald-400/20 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-300">
+                            1200 × 1500 px
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-white/50 block font-mono">النسبة: 4:5 (عالي الدقة)</span>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          {isAr ? 'أفضل دقة للـ Zoom واستكشاف الخامات والتفاصيل بدون تشويش' : 'Crisp high-resolution product showcase'}
+                        </p>
+                      </div>
+
+                      {/* Spec 4: Product Angles */}
+                      <div className="rounded-2xl border border-white/10 bg-black/50 p-3.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-purple-400" />
+                            {isAr ? 'صور الزوايا والتفاصيل الإضافية' : 'Detail & Angle Images'}
+                          </span>
+                          <span className="rounded-md bg-purple-400/20 px-2 py-0.5 text-[10px] font-mono font-bold text-purple-300">
+                            1200 × 1500 px
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-white/50 block font-mono">النسبة: 4:5 أو 1:1</span>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          {isAr ? 'صور الدرزات، البطانة، الأزرار، والإطلالات الخلفية' : 'Detail zoom & fabric texture shots'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 1: Welcome Hero Banner Editor */}
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-[#3b82f6]" />
+                          <span>{isAr ? 'البنر الترحيبي العريض (Welcome Hero Banner)' : 'Top Welcome Hero Banner'}</span>
+                        </h3>
+                        <span className="text-xs text-white/50">
+                          {isAr ? 'المقاس الموصى به: 1920 × 600 px (نسبة 16:5)' : 'Recommended: 1920 × 600 px (16:5)'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleVisibility('banner_hero_visible')}
+                        className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all cursor-pointer ${
+                          controls['banner_hero_visible']?.visible
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                            : 'bg-red-500/20 border-red-500/40 text-red-300'
+                        }`}
+                      >
+                        {controls['banner_hero_visible']?.visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                        <span>{controls['banner_hero_visible']?.visible ? (isAr ? 'ظاهر بالموقع' : 'Visible') : (isAr ? 'مخفي' : 'Hidden')}</span>
+                      </button>
+                    </div>
+
+                    {/* Headline Arabic & English */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'العنوان الرئيسي (العربية)' : 'Main Headline (Arabic)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['banner_hero_title']?.label_ar || ''}
+                          onChange={(e) => updateControl('banner_hero_title', { label_ar: e.target.value })}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'العنوان الرئيسي (الإنجليزية)' : 'Main Headline (English)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['banner_hero_title']?.label_en || ''}
+                          onChange={(e) => updateControl('banner_hero_title', { label_en: e.target.value })}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Subtitle / Manifesto Text */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'نص الفلسفة والبيان (العربية)' : 'Manifesto Description (Arabic)'}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={controls['banner_hero_subtitle']?.label_ar || ''}
+                          onChange={(e) => updateControl('banner_hero_subtitle', { label_ar: e.target.value })}
+                          className="w-full rounded-xl border border-white/15 bg-black/40 p-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'نص الفلسفة والبيان (الإنجليزية)' : 'Manifesto Description (English)'}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={controls['banner_hero_subtitle']?.label_en || ''}
+                          onChange={(e) => updateControl('banner_hero_subtitle', { label_en: e.target.value })}
+                          className="w-full rounded-xl border border-white/15 bg-black/40 p-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Top Tag & Button Labels */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'الشريط الأرشيفي أعلى البنر' : 'Top Tag Line'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['banner_hero_tag']?.label_ar || ''}
+                          onChange={(e) => updateControl('banner_hero_tag', { label_ar: e.target.value, label_en: e.target.value })}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'نص زر التصفح' : 'Action Button Label'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['banner_hero_btn']?.label_ar || ''}
+                          onChange={(e) => updateControl('banner_hero_btn', { label_ar: e.target.value, label_en: e.target.value })}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Background Image URL with Preview & Presets */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-white/70">
+                          {isAr ? 'رابط صورة خلفية البنر الترحيبي' : 'Hero Background Image URL'}
+                        </label>
+                        <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-400/10 px-2 py-0.2 rounded border border-amber-400/20">
+                          1920 × 600 px (16:5)
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={controls['banner_hero_bg']?.actionValue || ''}
+                          onChange={(e) => updateControl('banner_hero_bg', { actionValue: e.target.value })}
+                          placeholder="https://images.unsplash.com/..."
+                          className="h-10 flex-1 rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+
+                        {/* Direct File Upload to Supabase Storage */}
+                        <label className={`flex items-center justify-center gap-1.5 rounded-xl px-4 h-10 text-xs font-bold text-white transition-all cursor-pointer shrink-0 ${
+                          isUploadingHeroBg
+                            ? 'bg-emerald-700/60 cursor-not-allowed opacity-80'
+                            : 'bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-900/30'
+                        }`}>
+                          {isUploadingHeroBg ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin text-white" />
+                              <span>{isAr ? 'جار الرفع للسوبابيس...' : 'Uploading to Supabase...'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <UploadCloud className="h-4 w-4" />
+                              <span>{isAr ? 'رفع ملف لسوبابيس' : 'Upload to Supabase'}</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={isUploadingHeroBg}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                try {
+                                  setIsUploadingHeroBg(true);
+                                  const url = await uploadImageToSupabase(file, 'banners');
+                                  if (url) {
+                                    updateControl('banner_hero_bg', { actionValue: url });
+                                    setUploadHeroBgSuccess(true);
+                                    setTimeout(() => setUploadHeroBgSuccess(false), 5000);
+                                  }
+                                } finally {
+                                  setIsUploadingHeroBg(false);
+                                }
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {controls['banner_hero_bg']?.actionValue && (
+                          <div className="h-10 w-24 shrink-0 rounded-xl overflow-hidden border border-white/20 relative group">
+                            <img
+                              src={controls['banner_hero_bg'].actionValue}
+                              alt="Preview"
+                              className="h-full w-full object-cover"
+                            />
+                            <a
+                              href={controls['banner_hero_bg'].actionValue}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                            >
+                              {isAr ? 'عرض' : 'View'}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      {uploadHeroBgSuccess && (
+                        <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-1.5 animate-fade-in">
+                          <Check className="h-4 w-4 shrink-0" />
+                          <span>
+                            {isAr
+                              ? 'تم رفع الصورة وحفظها سحابياً في Supabase Storage بشكل دائم وبلا فقدان عند إعادة التحميل'
+                              : 'Successfully uploaded and permanently synced to Supabase Cloud Storage'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Quick Luxury Presets */}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] text-white/40">{isAr ? 'خيارات سريعة جاهزة:' : 'Presets:'}</span>
+                        {[
+                          { name: isAr ? 'أزياء أرشيفية رمادية' : 'Minimalist Grey', url: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1920&q=85' },
+                          { name: isAr ? 'ستوديو معماري هادئ' : 'Architectural Studio', url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1920&q=85' },
+                          { name: isAr ? 'صوف كشمير عاجي' : 'Cashmere Wool Texture', url: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=1920&q=85' },
+                          { name: isAr ? 'خياطة إيطالية ليلية' : 'Nocturnal Atelier', url: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=1920&q=85' },
+                        ].map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => updateControl('banner_hero_bg', { actionValue: preset.url })}
+                            className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-[10px] text-white/70 hover:text-white hover:border-[#3b82f6] transition-all cursor-pointer"
+                          >
+                            {preset.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: 5 Seasonal Trend Cards Studio */}
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Flame className="h-4 w-4 text-amber-400" />
+                          <span>{isAr ? 'كروت تريندات الموسم الخمسة (Seasonal Trends 2026 Cards)' : 'Seasonal Trends Cards'}</span>
+                        </h3>
+                        <span className="text-xs text-white/50">
+                          {isAr ? 'المقاس الموصى به لكل كارت: 800 × 1000 px (نسبة 4:5)' : 'Recommended for each card: 800 × 1000 px (4:5)'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-[#3b82f6] bg-[#3b82f6]/10 px-2 py-0.5 rounded-full border border-[#3b82f6]/20">
+                          {trendItems.length} {isAr ? 'كروت نشطة' : 'Active Cards'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Trends Headline Setting */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'عنوان القسم الرئيسي (العربية)' : 'Section Title (Arabic)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['banner_trends_title']?.label_ar || ''}
+                          onChange={(e) => updateControl('banner_trends_title', { label_ar: e.target.value })}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'عنوان القسم الرئيسي (الإنجليزية)' : 'Section Title (English)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['banner_trends_title']?.label_en || ''}
+                          onChange={(e) => updateControl('banner_trends_title', { label_en: e.target.value })}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 5 Trend Cards List */}
+                    <div className="space-y-3 pt-2">
+                      {trendItems.map((trend, idx) => (
+                        <div
+                          key={trend.id}
+                          className="rounded-2xl border border-white/10 bg-black/40 p-4 transition-all hover:border-white/20 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#3b82f6] font-mono">
+                              #{idx + 1} {trend.tagAr || trend.tagEn}
+                            </span>
+                            <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-400/10 px-2 py-0.2 rounded border border-amber-400/20">
+                              800 × 1000 px (4:5)
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[11px] text-white/70 block mb-1">{isAr ? 'العنوان (العربية)' : 'Title (AR)'}</label>
+                              <input
+                                type="text"
+                                value={trend.titleAr}
+                                onChange={(e) => updateTrendItem(trend.id, { titleAr: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-white/15 bg-black/60 px-2.5 text-xs text-white outline-none focus:border-[#3b82f6]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] text-white/70 block mb-1">{isAr ? 'العنوان (الإنجليزية)' : 'Title (EN)'}</label>
+                              <input
+                                type="text"
+                                value={trend.titleEn}
+                                onChange={(e) => updateTrendItem(trend.id, { titleEn: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-white/15 bg-black/60 px-2.5 text-xs text-white outline-none focus:border-[#3b82f6]"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[11px] text-white/70 block mb-1">{isAr ? 'الوصف الفرعي (العربية)' : 'Subtitle (AR)'}</label>
+                              <input
+                                type="text"
+                                value={trend.subtitleAr}
+                                onChange={(e) => updateTrendItem(trend.id, { subtitleAr: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-white/15 bg-black/60 px-2.5 text-xs text-white outline-none focus:border-[#3b82f6]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] text-white/70 block mb-1">{isAr ? 'الوسم الأرشيفي' : 'Tag'}</label>
+                              <input
+                                type="text"
+                                value={trend.tagAr}
+                                onChange={(e) => updateTrendItem(trend.id, { tagAr: e.target.value, tagEn: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-white/15 bg-black/60 px-2.5 text-xs text-white outline-none focus:border-[#3b82f6]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[11px] text-white/70 block mb-1">{isAr ? 'القسم المرتبط' : 'Category Target'}</label>
+                              <select
+                                value={trend.category}
+                                onChange={(e) => updateTrendItem(trend.id, { category: e.target.value })}
+                                className="h-9 w-full rounded-lg border border-white/15 bg-black/60 px-2 text-xs text-white outline-none cursor-pointer"
+                              >
+                                <option value="Tailoring">Tailoring</option>
+                                <option value="Outerwear">Outerwear</option>
+                                <option value="Knitwear">Knitwear</option>
+                                <option value="Accessories">Accessories</option>
+                                <option value="Leather Goods">Leather Goods</option>
+                                <option value="Footwear">Footwear</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Image URL with live preview thumbnail & file upload */}
+                          <div>
+                            <label className="text-[11px] text-white/70 block mb-1">
+                              {isAr ? 'رابط أو رفع صورة الكارت' : 'Card Image'}
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                value={trend.image}
+                                onChange={(e) => updateTrendItem(trend.id, { image: e.target.value })}
+                                placeholder="https://images.unsplash.com/..."
+                                className="h-9 flex-1 rounded-lg border border-white/15 bg-black/60 px-2.5 text-xs text-white outline-none focus:border-[#3b82f6]"
+                              />
+
+                              <label className={`flex items-center gap-1 rounded-lg px-2.5 h-9 text-[11px] font-bold text-white transition-all cursor-pointer shrink-0 ${
+                                uploadingTrendId === trend.id
+                                  ? 'bg-emerald-700/60 cursor-not-allowed opacity-80'
+                                  : 'bg-emerald-600 hover:bg-emerald-500'
+                              }`}>
+                                {uploadingTrendId === trend.id ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span>{isAr ? 'جار الرفع...' : 'Uploading...'}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UploadCloud className="h-3.5 w-3.5" />
+                                    <span>{isAr ? 'رفع' : 'Upload'}</span>
+                                  </>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={uploadingTrendId === trend.id}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        setUploadingTrendId(trend.id);
+                                        const url = await uploadImageToSupabase(file, 'trends');
+                                        if (url) updateTrendItem(trend.id, { image: url });
+                                      } finally {
+                                        setUploadingTrendId(null);
+                                      }
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              {trend.image && (
+                                <div className="h-9 w-12 shrink-0 rounded-lg overflow-hidden border border-white/20">
+                                  <img src={trend.image} alt="" className="h-full w-full object-cover" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Card 3: WhatsApp Concierge Phone Numbers */}
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4 text-emerald-400" />
+                      <span>{isAr ? 'أرقام الواتساب للطلبات والتفصيل' : 'WhatsApp Phone Numbers'}</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'رقم واتساب المبيعات والطلبات المباشرة' : 'Sales WhatsApp Phone'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['cfg_whatsapp_phone']?.actionValue || ''}
+                          onChange={(e) => updateControl('cfg_whatsapp_phone', { actionValue: e.target.value })}
+                          placeholder="+9647XXXXXXXXX"
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6] font-mono"
+                        />
+                        <span className="text-[10px] text-white/40 mt-1 block">
+                          {isAr ? 'يتم تحويل الزبون لهذا الرقم عند نقر زر الطلب' : 'Customer connects here on click'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-white/70 block mb-1">
+                          {isAr ? 'رقم واتساب التفصيل الخاص (Bespoke Concierge)' : 'Bespoke Concierge Phone'}
+                        </label>
+                        <input
+                          type="text"
+                          value={controls['cfg_bespoke_phone']?.actionValue || ''}
+                          onChange={(e) => updateControl('cfg_bespoke_phone', { actionValue: e.target.value })}
+                          placeholder="+9647XXXXXXXXX"
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6] font-mono"
+                        />
+                        <span className="text-[10px] text-white/40 mt-1 block">
+                          {isAr ? 'يتم تحويل الزبون للتفصيل الخاص عند إدخال قياسات مخصصة' : 'Used for Made-to-Measure custom builds'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3.5: SOCIAL & GLOBAL PLATFORMS */}
+              {activeTab === 'social' && (
+                <div className="max-w-6xl mx-auto">
+                  <SocialLinksManager isAr={isAr} />
+                </div>
+              )}
+
+              {/* TAB 4: BUTTONS & INTERACTIVE CONTROLS */}
+              {activeTab === 'controls' && (
+                <div className="space-y-4 max-w-4xl mx-auto">
+                  <div className="pb-2 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Sliders className="h-5 w-5 text-purple-400" />
+                        <span>{isAr ? 'التحكم بأزرار وخصائص الموقع' : 'Buttons & Interactive Controls'}</span>
+                      </h2>
+                      <p className="text-xs text-white/60 mt-0.5">
+                        {isAr
+                          ? 'إظهار أو إخفاء أي زر بالموقع بنقرة واحدة مع تحديث فوري'
+                          : 'Toggle visibility of all buttons and modules'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={resetAllControls}
+                      className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                    >
+                      {isAr ? 'استعادة الافتراضي' : 'Reset Defaults'}
+                    </button>
+                  </div>
+
+                  {/* Dedicated Currency Cloud Setting Card */}
+                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-xs font-bold text-white">
+                          {isAr ? 'تنسيق عرض العملة للكتالوج (مزامنة سحابية مباشرة)' : 'Catalog Currency Format (Live Cloud Sync)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/60 mt-0.5">
+                        {isAr
+                          ? 'أي تغيير هنا يُحفظ فوراً في السحابة ويظهر لجميع الزبائن على كافة الأجهزة فوراً'
+                          : 'Changes immediately persist to Supabase and sync live across all visitors.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 self-start sm:self-auto bg-black/40 p-1 rounded-xl border border-white/10">
+                      {(['د.ع', 'IQD', 'USD'] as const).map((curr) => (
+                        <button
+                          key={curr}
+                          type="button"
+                          onClick={() => setCurrencyCode(curr)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                            currencyCode === curr
+                              ? 'bg-[#004ad7] text-white shadow-sm'
+                              : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {curr}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Object.values(controls)
+                      .filter((c) => !c.id.startsWith('banner_'))
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                        >
+                          <div className="min-w-0 flex-1 pr-2 rtl:pr-0 rtl:pl-2">
+                            <span className="text-xs font-bold text-white block truncate">
+                              {isAr ? item.name_ar : item.name_en}
+                            </span>
+                            <span className="text-[11px] text-white/50 block line-clamp-1">
+                              {isAr ? item.description_ar : item.description_en}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleVisibility(item.id)}
+                            className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold border transition-all cursor-pointer ${
+                              item.visible
+                                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                                : 'bg-red-500/20 border-red-500/40 text-red-300'
+                            }`}
+                          >
+                            {item.visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                            <span>{item.visible ? (isAr ? 'ظاهر' : 'Visible') : (isAr ? 'مخفي' : 'Hidden')}</span>
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: BACKUP & MULTI-FORMAT EXPORT ENGINE */}
+              {activeTab === 'backup' && (
+                <div className="space-y-6 max-w-4xl mx-auto">
+                  <div className="pb-2 border-b border-white/10">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Download className="h-5 w-5 text-cyan-400" />
+                      <span>{isAr ? 'مركز تصدير البيانات والنسخ الاحتياطي متعدد الصيغ' : 'Multi-Format Export & Backup Hub'}</span>
+                    </h2>
+                    <p className="text-xs text-white/60 mt-0.5">
+                      {isAr
+                        ? 'تصدير وسحب بيانات المتجر والكتالوج وسلوكيات الزوار بكافة الصيغ العالمية بنقرة واحدة'
+                        : 'Export catalog, customer behavior, and sales metrics in Excel, CSV, JSON, PDF & Markdown'}
+                    </p>
+                  </div>
+
+                  {/* Multi-Format Export Station */}
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-[#3b82f6]" />
+                        <span>{isAr ? 'سحب وتصدير التحليلات وسجلات الزبائن (Multi-Format Downloads)' : 'Multi-Format Telemetry & Customer Exports'}</span>
+                      </h3>
+                      <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                        {isAr ? 'جاهز للتنزيل الفوري' : 'Instant Generation'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                      {/* Excel */}
+                      <button
+                        type="button"
+                        onClick={() => downloadAnalyticsExcel(products)}
+                        className="flex flex-col justify-between rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] hover:bg-emerald-500/[0.12] p-4 text-start transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:scale-105 transition-transform">
+                            <FileSpreadsheet className="h-5 w-5" />
+                          </div>
+                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300 font-mono">.XLS / EXCEL</span>
+                        </div>
+                        <span className="font-bold text-xs text-white block">{isAr ? 'جدول إكسل متكامل' : 'Excel Workbook'}</span>
+                        <span className="text-[10px] text-white/50 mt-1 block">{isAr ? 'أوراق عمل منسقة للـ KPIs والقطع والزبائن' : 'Multi-sheet workbook with styled KPIs'}</span>
+                      </button>
+
+                      {/* CSV */}
+                      <button
+                        type="button"
+                        onClick={() => downloadAnalyticsCSV(products)}
+                        className="flex flex-col justify-between rounded-2xl border border-blue-500/30 bg-blue-500/[0.05] hover:bg-blue-500/[0.12] p-4 text-start transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/20 text-blue-400 group-hover:scale-105 transition-transform">
+                            <Download className="h-5 w-5" />
+                          </div>
+                          <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold text-blue-300 font-mono">.CSV / UTF-8</span>
+                        </div>
+                        <span className="font-bold text-xs text-white block">{isAr ? 'ملف بيانات CSV' : 'CSV Dataset'}</span>
+                        <span className="text-[10px] text-white/50 mt-1 block">{isAr ? 'ترميز عربي متوافق 100% مع Excel' : 'UTF-8 with BOM encoding for Arabic'}</span>
+                      </button>
+
+                      {/* JSON */}
+                      <button
+                        type="button"
+                        onClick={() => downloadAnalyticsJSON(products)}
+                        className="flex flex-col justify-between rounded-2xl border border-purple-500/30 bg-purple-500/[0.05] hover:bg-purple-500/[0.12] p-4 text-start transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 group-hover:scale-105 transition-transform">
+                            <FileCode className="h-5 w-5" />
+                          </div>
+                          <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-300 font-mono">.JSON</span>
+                        </div>
+                        <span className="font-bold text-xs text-white block">{isAr ? 'ملف بيانات هيكلية JSON' : 'Structured JSON'}</span>
+                        <span className="text-[10px] text-white/50 mt-1 block">{isAr ? 'بيانات كاملة للربط البرمجي السحابي' : 'Complete dataset for APIs & database'}</span>
+                      </button>
+
+                      {/* HTML / PDF */}
+                      <button
+                        type="button"
+                        onClick={() => downloadAnalyticsHTMLReport(products)}
+                        className="flex flex-col justify-between rounded-2xl border border-amber-500/30 bg-amber-500/[0.05] hover:bg-amber-500/[0.12] p-4 text-start transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 group-hover:scale-105 transition-transform">
+                            <Printer className="h-5 w-5" />
+                          </div>
+                          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300 font-mono">.PDF / PRINT</span>
+                        </div>
+                        <span className="font-bold text-xs text-white block">{isAr ? 'تقرير تنفيذي PDF / طباعة' : 'Printable PDF Report'}</span>
+                        <span className="text-[10px] text-white/50 mt-1 block">{isAr ? 'مستند فاخر للطباعة المباشرة والأرشفة' : 'Executive report formatted for print/PDF'}</span>
+                      </button>
+
+                      {/* Markdown */}
+                      <button
+                        type="button"
+                        onClick={() => downloadAnalyticsMarkdown(products)}
+                        className="flex flex-col justify-between rounded-2xl border border-cyan-500/30 bg-cyan-500/[0.05] hover:bg-cyan-500/[0.12] p-4 text-start transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 group-hover:scale-105 transition-transform">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300 font-mono">.MD</span>
+                        </div>
+                        <span className="font-bold text-xs text-white block">{isAr ? 'ملخص ماركداون' : 'Markdown Report'}</span>
+                        <span className="text-[10px] text-white/50 mt-1 block">{isAr ? 'ملف نصي منسق للإرسال والمشاركة' : 'Text summary formatted for quick sharing'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* System Backup & JSON Restore */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                      <h3 className="text-sm font-bold text-white">
+                        {isAr ? 'تصدير نسخة احتياطية كاملة' : 'Export Full Backup'}
+                      </h3>
+                      <p className="text-xs text-white/60 leading-relaxed">
+                        {isAr
+                          ? 'يشمل كافة القطع والعروض والأسعار والصور والبنرات ونصوص الموقع في ملف واحد.'
+                          : 'Downloads all catalog pieces, custom offers, banners and site controls.'}
+                      </p>
+
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const json = exportAllDataJSON();
+                            const blob = new Blob([json], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `vant_full_backup_${Date.now()}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="flex items-center gap-2 rounded-xl bg-[#004ad7] px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-[#004ad7]/90 transition-all cursor-pointer"
+                        >
+                          <Download className="h-4 w-4" />
+                          <span>{isAr ? 'تحميل JSON' : 'Download JSON'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(exportAllDataJSON());
+                            setCopiedJSON(true);
+                            setTimeout(() => setCopiedJSON(false), 2000);
+                          }}
+                          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all cursor-pointer"
+                        >
+                          {copiedJSON ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                          <span>{copiedJSON ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ' : 'Copy')}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                      <h3 className="text-sm font-bold text-white">
+                        {isAr ? 'استيراد واستعادة من ملف JSON' : 'Import & Restore from JSON'}
+                      </h3>
+                      <textarea
+                        rows={3}
+                        value={importText}
+                        onChange={(e) => setImportText(e.target.value)}
+                        placeholder='{"controls": {...}, "products": [...]}'
+                        className="w-full rounded-2xl border border-white/15 bg-black/40 p-3 text-xs font-mono text-white outline-none focus:border-[#3b82f6]"
+                      />
+                      {importError && (
+                        <p className="text-xs text-red-400">{importError}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const success = importAllDataJSON(importText);
+                          if (success) {
+                            alert(isAr ? 'تمت استعادة البيانات بنجاح!' : 'Restored successfully!');
+                            setImportText('');
+                            setImportError(null);
+                          } else {
+                            setImportError(isAr ? 'صيغة JSON غير صالحة' : 'Invalid JSON format');
+                          }
+                        }}
+                        className="flex items-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 px-4 py-2 text-xs font-bold text-white shadow-md transition-all cursor-pointer"
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span>{isAr ? 'استعادة وتطبيق الآن' : 'Import & Restore'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 6: SECURITY & PASSWORD */}
+              {activeTab === 'security' && (
+                <div className="space-y-6 max-w-md mx-auto">
+                  <div className="pb-2 border-b border-white/10">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <KeyRound className="h-5 w-5 text-rose-400" />
+                      <span>{isAr ? 'الأمان وتغيير كلمة المرور' : 'Security & Access Key'}</span>
+                    </h2>
+                    <p className="text-xs text-white/60 mt-0.5">
+                      {isAr ? 'تغيير كلمة المرور الخاصة بالدخول لمركز العمليات' : 'Change master operations security key'}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-white/70 block mb-1">
+                        {isAr ? 'كلمة المرور الجديدة' : 'New Master Password'}
+                      </label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="h-11 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-sm text-white font-mono outline-none focus:border-[#3b82f6]"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSavePassword}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#004ad7] font-semibold text-xs text-white shadow-md hover:bg-[#004ad7]/90 transition-all cursor-pointer"
+                    >
+                      {passwordSuccess ? <Check className="h-4 w-4 text-emerald-400" /> : <KeyRound className="h-4 w-4" />}
+                      <span>{passwordSuccess ? (isAr ? 'تم الحفظ وتحديث كلمة المرور!' : 'Saved successfully!') : (isAr ? 'حفظ كلمة المرور' : 'Save Password')}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </main>
+          </div>
+        )}
+
+        {/* ADD / EDIT PRODUCT MODAL */}
+        {(isAddingNew || editingProduct) && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md overflow-hidden">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative flex flex-col w-full max-w-2xl h-[90vh] max-h-[90vh] rounded-3xl border border-white/15 bg-[#12151e] shadow-2xl overflow-hidden"
+              dir={isAr ? 'rtl' : 'ltr'}
+            >
+              {/* Modal Header */}
+              <div className="shrink-0 flex items-center justify-between border-b border-white/10 px-5 py-4 bg-[#151926]">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Package className="h-4 w-4 text-emerald-400" />
+                  <span>
+                    {isAddingNew
+                      ? isAr ? 'إضافة قطعة جديدة للكتالوج' : 'Add New Piece to Catalog'
+                      : isAr ? 'تعديل تفاصيل القطعة' : 'Edit Piece Details'}
+                  </span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingNew(false);
+                    setEditingProduct(null);
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Modal Form Scrollable */}
+              <form
+                onSubmit={handleSaveProductForm}
+                className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 touch-pan-y"
+              >
+                {/* Titles AR & EN */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-xs font-semibold text-white/70 block mb-1">
+                      {isAr ? 'اسم القطعة (العربية)' : 'Title (Arabic)'} *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formTitleAr}
+                      onChange={(e) => setFormTitleAr(e.target.value)}
+                      placeholder="مثال: سترة صوف كشمير عاجية"
+                      className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-white/70 block mb-1">
+                      {isAr ? 'اسم القطعة (الإنجليزية)' : 'Title (English)'} *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formTitleEn}
+                      onChange={(e) => setFormTitleEn(e.target.value)}
+                      placeholder="e.g. Sculptural Double-Breasted Blazer"
+                      className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#3b82f6]"
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing & Offers Section */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Coins className="h-4 w-4 text-amber-400" />
+                      <span>{isAr ? 'التسعير والعروض الخاصة' : 'Pricing & Offers'}</span>
+                    </span>
+
+                    {/* Offer Switch */}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <span className="text-xs text-white/70">{isAr ? 'تفعيل كعرض خاص (Discount Offer)' : 'Special Offer'}</span>
+                      <input
+                        type="checkbox"
+                        checked={formIsOffer}
+                        onChange={(e) => setFormIsOffer(e.target.checked)}
+                        className="h-4 w-4 rounded accent-rose-500 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-white/70 block mb-1">
+                        {formIsOffer ? (isAr ? 'سعر البيع بعد العرض (النهائي)' : 'Offer Price (Final)') : (isAr ? 'السعر' : 'Price')} *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        value={formPrice}
+                        onChange={(e) => setFormPrice(Number(e.target.value))}
+                        className={`h-10 w-full rounded-xl border px-3 text-xs font-bold outline-none ${
+                          formIsOffer
+                            ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
+                            : 'border-white/15 bg-black/40 text-white'
+                        }`}
+                      />
+                    </div>
+
+                    {formIsOffer && (
+                      <div>
+                        <label className="text-xs text-white/70 block mb-1">
+                          {isAr ? 'السعر الأصلي قبل الخصم (للمقارنة والشطب)' : 'Original Price (Strikethrough)'}
+                        </label>
+                        <input
+                          type="number"
+                          value={formOriginalPrice}
+                          onChange={(e) => setFormOriginalPrice(Number(e.target.value))}
+                          className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white/70 outline-none"
+                        />
+                        {formOriginalPrice > formPrice && (
+                          <span className="text-[10px] text-emerald-400 mt-1 block font-semibold">
+                            {isAr
+                              ? `نسبة الخصم: ${Math.round(((formOriginalPrice - formPrice) / formOriginalPrice) * 100)}% توفير`
+                              : `Savings: ${Math.round(((formOriginalPrice - formPrice) / formOriginalPrice) * 100)}% off`}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {formIsOffer && (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="text-[11px] text-white/70 block mb-1">
+                          {isAr ? 'نص شارة العرض (العربية)' : 'Offer Badge (AR)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={formOfferBadgeAr}
+                          onChange={(e) => setFormOfferBadgeAr(e.target.value)}
+                          placeholder="عرض خاص / خصم 20%"
+                          className="h-9 w-full rounded-lg border border-rose-500/30 bg-black/40 px-2.5 text-xs text-rose-200 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-white/70 block mb-1">
+                          {isAr ? 'نص شارة العرض (الإنجليزية)' : 'Offer Badge (EN)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={formOfferBadgeEn}
+                          onChange={(e) => setFormOfferBadgeEn(e.target.value)}
+                          placeholder="Special Offer / 20% OFF"
+                          className="h-9 w-full rounded-lg border border-rose-500/30 bg-black/40 px-2.5 text-xs text-rose-200 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Category & Availability */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-xs font-semibold text-white/70 block mb-1">
+                      {isAr ? 'القسم (Category)' : 'Category'} *
+                    </label>
+                    <select
+                      value={formCategory}
+                      onChange={(e) => {
+                        setFormCategory(e.target.value);
+                        if (e.target.value === 'Tailoring') setFormCategoryAr('الأزياء الرسمية');
+                        else if (e.target.value === 'Outerwear') setFormCategoryAr('المعاطف والسترات');
+                        else if (e.target.value === 'Knitwear') setFormCategoryAr('التريكو والصوف');
+                        else if (e.target.value === 'Leather Goods') setFormCategoryAr('الجلود الراقية');
+                        else if (e.target.value === 'Footwear') setFormCategoryAr('الأحذية');
+                        else if (e.target.value === 'Bespoke') setFormCategoryAr('التفصيل الخاص');
+                      }}
+                      className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none cursor-pointer"
+                    >
+                      <option value="Tailoring">Tailoring (الأزياء الرسمية)</option>
+                      <option value="Outerwear">Outerwear (المعاطف والسترات)</option>
+                      <option value="Knitwear">Knitwear (التريكو والصوف)</option>
+                      <option value="Leather Goods">Leather Goods (الجلود الراقية)</option>
+                      <option value="Footwear">Footwear (الأحذية)</option>
+                      <option value="Bespoke">Bespoke (التفصيل الخاص)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-white/70 block mb-1">
+                      {isAr ? 'حالة التوفر' : 'Availability'} *
+                    </label>
+                    <select
+                      value={formAvailability}
+                      onChange={(e) => setFormAvailability(e.target.value as ProductAvailability)}
+                      className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none cursor-pointer"
+                    >
+                      <option value="in_stock">{isAr ? 'متوفر وجاهز للشحن الفوري' : 'In Stock'}</option>
+                      <option value="sold_out">{isAr ? 'منتهي من المخزون' : 'Sold Out'}</option>
+                      <option value="coming_soon">{isAr ? 'إصدار قادم قريباً' : 'Coming Soon'}</option>
+                      <option value="limited">{isAr ? 'كمية محدودة جداً' : 'Limited Archive'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* File, Folder, and URL Image Management with ImageUploader */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                  <ImageUploader
+                    images={formImagesList}
+                    primaryImage={formImageUrl || formImagesList[0]}
+                    onPrimaryChange={(pri) => {
+                      setFormImageUrl(pri);
+                      const reordered = [pri, ...formImagesList.filter((x) => x !== pri)];
+                      setFormImagesList(reordered);
+                      setFormExtraImages(reordered.slice(1).join('\n'));
+                    }}
+                    onChange={(newImgs) => {
+                      setFormImagesList(newImgs);
+                      setFormImageUrl(newImgs[0] || '');
+                      setFormExtraImages(newImgs.slice(1).join('\n'));
+                    }}
+                    isAr={isAr}
+                    recommendedSpec="1200 × 1500 px (4:5)"
+                    allowMultiple={true}
+                  />
+                </div>
+
+                {/* Available Sizes Selection */}
+                <div>
+                  <label className="text-xs font-semibold text-white/70 block mb-1.5">
+                    {isAr ? 'المقاسات المتوفرة للقطعة' : 'Available Sizes'}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {ALL_SIZES.map((size) => {
+                      const isSelected = formSizes.includes(size);
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setFormSizes(formSizes.filter((s) => s !== size));
+                            } else {
+                              setFormSizes([...formSizes, size]);
+                            }
+                          }}
+                          className={`h-8 w-11 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#004ad7] border-[#004ad7] text-white shadow-xs'
+                              : 'border-white/15 bg-black/30 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Material & Description */}
+                <div>
+                  <label className="text-xs font-semibold text-white/70 block mb-1">
+                    {isAr ? 'الخامة والقماش' : 'Material & Fabric'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formMaterial}
+                    onChange={(e) => setFormMaterial(e.target.value)}
+                    placeholder="مثال: 100% صوف إيطالي عيار 150"
+                    className="h-10 w-full rounded-xl border border-white/15 bg-black/40 px-3 text-xs text-white outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-xs font-semibold text-white/70 block mb-1">
+                      {isAr ? 'الوصف (العربية)' : 'Description (Arabic)'}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formDescAr}
+                      onChange={(e) => setFormDescAr(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/40 p-2.5 text-xs text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-white/70 block mb-1">
+                      {isAr ? 'الوصف (الإنجليزية)' : 'Description (English)'}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formDescEn}
+                      onChange={(e) => setFormDescEn(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/40 p-2.5 text-xs text-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Submit Action */}
+                <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingNew(false);
+                      setEditingProduct(null);
+                    }}
+                    className="rounded-xl border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 hover:bg-white/10"
+                  >
+                    {isAr ? 'إلغاء' : 'Cancel'}
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {isAddingNew
+                      ? isAr ? 'إضافة القطعة للكتالوج' : 'Add Piece'
+                      : isAr ? 'حفظ التعديلات' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </div>
+    </AnimatePresence>
+  );
+}

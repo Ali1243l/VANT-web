@@ -1,6 +1,6 @@
 {
-  "name": "VANT — Digital Lookbook",
-  "description": "Archival Streetwear & Couture Atelier. Browse the latest drops and exclusive collections.",
+  "name": "VANT Lookbook",
+  "description": "Bilingual luxury fashion lookbook with dynamic masonry grid, interactive drawer sheet, and size matrix.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
