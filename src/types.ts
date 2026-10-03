@@ -24,6 +24,7 @@ export interface Product {
   tags?: string[];
   created_at?: string;
   availability?: ProductAvailability;
+  aspect_ratio?: string;
   is_offer?: boolean;
   original_price?: number;
   offer_badge_ar?: string;

@@ -283,6 +283,37 @@ const ENHANCEMENTS_STORAGE_KEY = 'vant_product_enhancements_v2';
 const CURRENCY_STORAGE_KEY = 'vant_currency_code_v2';
 const PIN_STORAGE_KEY = 'vant_admin_pass_v3';
 const SESSION_AUTH_KEY = 'vant_admin_auth_session';
+const SETTINGS_STORAGE_KEY = 'vant_site_settings_v1';
+
+export type SplashMotifType =
+  | 'print_press'
+  | 'tshirt_print'
+  | 'embroidery'
+  | 'hanger'
+  | 'needle_thread'
+  | 'mannequin'
+  | 'monogram'
+  | 'scissors';
+
+export interface SiteSettings {
+  id?: string | number;
+  maintenance_mode: boolean;
+  loading_text_en: string;
+  loading_text_ar: string;
+  maintenance_message: string;
+  maintenance_message_ar?: string;
+  splash_motif?: SplashMotifType;
+  updated_at?: string;
+}
+
+export const DEFAULT_SITE_SETTINGS: SiteSettings = {
+  maintenance_mode: false,
+  loading_text_en: 'INITIALIZING ARCHIVE',
+  loading_text_ar: 'جاري تحميل الأرشيف وتجهيز التشكيلة',
+  maintenance_message: 'We are preparing Volume 02. Please check back later.',
+  maintenance_message_ar: 'نعمل حالياً على تجهيز التشكيلة الجديدة وتحديث النظام. يرجى العودة لاحقاً.',
+  splash_motif: 'hanger',
+};
 
 export interface ProductEnhancement {
   title_ar?: string;
@@ -294,6 +325,7 @@ export interface ProductEnhancement {
   tags?: string[];
   image_url?: string;
   images?: string[];
+  aspect_ratio?: string;
 }
 
 function getStoredEnhancements(): Record<string, ProductEnhancement> {
@@ -343,10 +375,14 @@ export interface SiteControlsContextType {
   // Full Catalog CMS
   products: Product[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  totalProductsCount: number;
   error: string | null;
   isLiveDatabase: boolean;
   lastSyncTime: Date | null;
   refreshProducts: () => Promise<void>;
+  loadMoreProducts: () => Promise<void>;
   addProduct: (product: Omit<Product, 'id'> & { id?: string | number }) => Product;
   updateProduct: (id: string | number, updates: Partial<Product>) => void;
   deleteProduct: (id: string | number) => void;
@@ -379,6 +415,15 @@ export interface SiteControlsContextType {
   unlockAdmin: (pin: string) => boolean;
   lockAdmin: () => void;
   setAdminPin: (newPin: string) => void;
+
+  // Global Site Settings (Maintenance Mode & Splash Preloader)
+  siteSettings: SiteSettings;
+  updateSiteSettings: (updates: Partial<SiteSettings>) => Promise<boolean>;
+  isInitialSplashLoading: boolean;
+  isPreviewSplash: boolean;
+  setIsPreviewSplash: (show: boolean) => void;
+  isPreviewMaintenance: boolean;
+  setIsPreviewMaintenance: (show: boolean) => void;
 
   // Supabase Cloud Sync
   isCloudSynced: boolean;
@@ -437,10 +482,75 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
   // 3. Products Catalog CMS State (Connected to real Supabase database)
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [isLiveDatabase, setIsLiveDatabase] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const hasLoadedOnceRef = useRef(false);
+  const PAGE_SIZE = 12;
+
+  const mapSupabaseProducts = (data: any[]): Product[] => {
+    const enhancements = getStoredEnhancements();
+    return data.map((p: any) => {
+      const mediaList = Array.isArray(p.product_media)
+        ? [...p.product_media].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+        : [];
+      const mediaUrls = mediaList.map((m: any) => m.media_url?.trim()).filter(Boolean);
+      const enhancement = enhancements[String(p.id)] || {};
+
+      // Prioritize database media_url from Supabase product_media, then enhancement, then fallback
+      const primaryImage =
+        mediaUrls[0] ||
+        enhancement.image_url ||
+        p.image_url ||
+        'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1200&q=85';
+
+      let availability: ProductAvailability = 'in_stock';
+      const rawStatus = (p.status || '').toUpperCase().trim();
+      if (rawStatus === 'COMING_SOON' || rawStatus === 'COMINGSOON') availability = 'coming_soon';
+      else if (rawStatus === 'SOLD_OUT' || rawStatus === 'SOLDOUT') availability = 'sold_out';
+      else if (rawStatus === 'LIMITED') availability = 'limited';
+
+      const isOffer = Boolean(enhancement.is_offer || p.is_exclusive_drop);
+      const numPrice = Number(p.price) || 0;
+      const originalPrice = enhancement.original_price || (isOffer ? Math.round(numPrice * 1.25) : undefined);
+
+      const allImages =
+        mediaUrls.length > 0
+          ? mediaUrls
+          : enhancement.images && enhancement.images.length > 0
+          ? enhancement.images
+          : [primaryImage];
+
+      return {
+        id: p.id,
+        title: p.title || 'Untitled Piece',
+        title_ar: enhancement.title_ar || p.title_ar || p.title || 'قطعة حصرية',
+        price: numPrice,
+        original_price: originalPrice,
+        is_offer: isOffer,
+        offer_badge_ar: enhancement.offer_badge_ar || (isOffer ? 'عرض خاص' : undefined),
+        offer_badge_en: enhancement.offer_badge_en || (isOffer ? 'Special Offer' : undefined),
+        currency: 'IQD',
+        category: p.category || 'Tailoring',
+        category_ar: enhancement.category_ar || p.category_ar || (p.category === 'T-Shirts' ? 'تيشيرتات' : p.category),
+        image_url: primaryImage,
+        images: allImages,
+        sizes: Array.isArray(p.sizes) && p.sizes.length > 0 ? p.sizes : ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+        description: p.description || '',
+        description_ar: p.description_ar || p.description,
+        material: p.material || '',
+        fit_details: p.fit_details || '',
+        tags: enhancement.tags || (Array.isArray(p.tags) ? p.tags : []),
+        created_at: p.created_at,
+        availability,
+        aspect_ratio: p.aspect_ratio || enhancement.aspect_ratio || undefined,
+      };
+    });
+  };
 
   const loadProductsFromSupabase = useCallback(async (isSilent = false) => {
     if (!supabase) {
@@ -452,10 +562,11 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
       if (!hasLoadedOnceRef.current && !isSilent) {
         setLoading(true);
       }
-      const { data, error: sbError } = await supabase
+      const { data, count, error: sbError } = await supabase
         .from('products')
-        .select('*, product_media(*)')
-        .order('created_at', { ascending: false });
+        .select('*, product_media(*)', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(0, PAGE_SIZE - 1);
 
       if (sbError) {
         console.error('Supabase query error in SiteControls:', sbError.message);
@@ -465,70 +576,12 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
       }
 
       if (data) {
-        const enhancements = getStoredEnhancements();
-        const mapped: Product[] = data.map((p: any) => {
-          const mediaList = Array.isArray(p.product_media)
-            ? [...p.product_media].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
-            : [];
-          const mediaUrls = mediaList.map((m: any) => m.media_url?.trim()).filter(Boolean);
-          const enhancement = enhancements[String(p.id)] || {};
-
-          // Prioritize database media_url from Supabase product_media, then enhancement, then fallback
-          const primaryImage =
-            mediaUrls[0] ||
-            enhancement.image_url ||
-            p.image_url ||
-            'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1200&q=85';
-
-          let availability: ProductAvailability = 'in_stock';
-          const rawStatus = (p.status || '').toUpperCase().trim();
-          if (rawStatus === 'COMING_SOON' || rawStatus === 'COMINGSOON') availability = 'coming_soon';
-          else if (rawStatus === 'SOLD_OUT' || rawStatus === 'SOLDOUT') availability = 'sold_out';
-          else if (rawStatus === 'LIMITED') availability = 'limited';
-
-          const isOffer = Boolean(enhancement.is_offer || p.is_exclusive_drop);
-          const numPrice = Number(p.price) || 0;
-          const originalPrice = enhancement.original_price || (isOffer ? Math.round(numPrice * 1.25) : undefined);
-
-          const allImages =
-            mediaUrls.length > 0
-              ? mediaUrls
-              : enhancement.images && enhancement.images.length > 0
-              ? enhancement.images
-              : [primaryImage];
-
-          return {
-            id: p.id,
-            title: p.title || 'Untitled Piece',
-            title_ar: enhancement.title_ar || p.title_ar || p.title || 'قطعة حصرية',
-            price: numPrice,
-            original_price: originalPrice,
-            is_offer: isOffer,
-            offer_badge_ar: enhancement.offer_badge_ar || (isOffer ? 'عرض خاص' : undefined),
-            offer_badge_en: enhancement.offer_badge_en || (isOffer ? 'Special Offer' : undefined),
-            currency: 'IQD',
-            category: p.category || 'Tailoring',
-            category_ar: enhancement.category_ar || p.category_ar || (p.category === 'T-Shirts' ? 'تيشيرتات' : p.category),
-            image_url: primaryImage,
-            images: allImages,
-            sizes: Array.isArray(p.sizes) && p.sizes.length > 0 ? p.sizes : ['S', 'M', 'L', 'XL'],
-            description: p.description || '',
-            description_ar: p.description_ar || p.description,
-            material: p.material || '',
-            fit_details: p.fit_details || '',
-            tags: enhancement.tags || (Array.isArray(p.tags) ? p.tags : []),
-            created_at: p.created_at,
-            availability,
-          };
-        });
-
-        // Only update products state if the data has actually changed to prevent flickering and re-renders
-        setProducts((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(mapped)) {
-            return prev;
-          }
-          return mapped;
-        });
+        const mapped = mapSupabaseProducts(data);
+        setProducts(mapped);
+        setCurrentPage(0);
+        const total = typeof count === 'number' ? count : mapped.length;
+        setTotalProductsCount(total);
+        setHasMore(total > mapped.length && data.length >= PAGE_SIZE);
         setIsLiveDatabase(true);
         setError(null);
         setLastSyncTime(new Date());
@@ -543,6 +596,49 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
+
+  const loadMoreProducts = useCallback(async () => {
+    if (!supabase || loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = currentPage + 1;
+      const from = nextPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, count, error: sbError } = await supabase
+        .from('products')
+        .select('*, product_media(*)', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (sbError) {
+        console.error('Error fetching more products:', sbError.message);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const mapped = mapSupabaseProducts(data);
+        setProducts((prev) => {
+          const existingIds = new Set(prev.map((p) => String(p.id)));
+          const uniqueNew = mapped.filter((p) => !existingIds.has(String(p.id)));
+          const combined = [...prev, ...uniqueNew];
+          const total = typeof count === 'number' ? count : totalProductsCount;
+          setHasMore(total > combined.length && data.length >= PAGE_SIZE);
+          return combined;
+        });
+        setCurrentPage(nextPage);
+        if (typeof count === 'number') {
+          setTotalProductsCount(count);
+        }
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Failed loading more products:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [currentPage, hasMore, loadingMore, totalProductsCount]);
 
   useEffect(() => {
     // Initial fetch
@@ -882,6 +978,119 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
     }
     return false;
   });
+
+  // 7. Global Site Settings (Maintenance Mode & Splash Preloader)
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      }
+    } catch {}
+    return DEFAULT_SITE_SETTINGS;
+  });
+
+  const [isInitialSplashLoading, setIsInitialSplashLoading] = useState(true);
+  const [isPreviewSplash, setIsPreviewSplash] = useState(false);
+  const [isPreviewMaintenance, setIsPreviewMaintenance] = useState(false);
+
+  // Fetch site_settings from Supabase
+  const loadSiteSettingsFromSupabase = useCallback(async () => {
+    if (!supabase) {
+      setIsInitialSplashLoading(false);
+      return;
+    }
+    try {
+      const { data, error: sbError } = await supabase
+        .from('site_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (sbError) {
+        console.warn('Supabase site_settings query notice:', sbError.message);
+      } else if (data) {
+        const merged: SiteSettings = {
+          ...DEFAULT_SITE_SETTINGS,
+          ...data,
+          maintenance_mode: Boolean(data.maintenance_mode),
+          loading_text_en: data.loading_text_en || DEFAULT_SITE_SETTINGS.loading_text_en,
+          loading_text_ar: data.loading_text_ar || DEFAULT_SITE_SETTINGS.loading_text_ar,
+          maintenance_message: data.maintenance_message || DEFAULT_SITE_SETTINGS.maintenance_message,
+          maintenance_message_ar: data.maintenance_message_ar || DEFAULT_SITE_SETTINGS.maintenance_message_ar,
+          splash_motif: data.splash_motif || DEFAULT_SITE_SETTINGS.splash_motif || 'hanger',
+        };
+        setSiteSettings(merged);
+        try {
+          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Could not fetch site_settings:', e);
+    } finally {
+      setIsInitialSplashLoading(false);
+    }
+  }, []);
+
+  const updateSiteSettings = useCallback(
+    async (updates: Partial<SiteSettings>): Promise<boolean> => {
+      const next: SiteSettings = { ...siteSettings, ...updates };
+      setSiteSettings(next);
+      try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+
+      if (supabase) {
+        try {
+          const payload = {
+            maintenance_mode: next.maintenance_mode,
+            loading_text_en: next.loading_text_en,
+            loading_text_ar: next.loading_text_ar,
+            maintenance_message: next.maintenance_message,
+            maintenance_message_ar: next.maintenance_message_ar,
+            splash_motif: next.splash_motif || 'hanger',
+            updated_at: new Date().toISOString(),
+          };
+
+          if (next.id) {
+            await supabase.from('site_settings').update(payload).eq('id', next.id);
+          } else {
+            const { data } = await supabase
+              .from('site_settings')
+              .upsert(payload)
+              .select()
+              .maybeSingle();
+            if (data?.id) {
+              setSiteSettings((prev) => ({ ...prev, id: data.id }));
+            }
+          }
+          return true;
+        } catch (err) {
+          console.warn('Failed to persist site_settings to Supabase:', err);
+        }
+      }
+      return true;
+    },
+    [siteSettings]
+  );
+
+  useEffect(() => {
+    loadSiteSettingsFromSupabase();
+
+    const client = supabase;
+    if (client) {
+      const channel = client
+        .channel('site_settings_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_settings' }, () => {
+          loadSiteSettingsFromSupabase();
+        })
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
+  }, [loadSiteSettingsFromSupabase]);
 
   // Save controls whenever modified
   useEffect(() => {
@@ -1397,10 +1606,14 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
         formatPrice: formatPriceVal,
         products,
         loading,
+        loadingMore,
+        hasMore,
+        totalProductsCount,
         error,
         isLiveDatabase,
         lastSyncTime,
         refreshProducts: loadProductsFromSupabase,
+        loadMoreProducts,
         addProduct,
         updateProduct,
         deleteProduct,
@@ -1427,6 +1640,13 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
         unlockAdmin,
         lockAdmin,
         setAdminPin,
+        siteSettings,
+        updateSiteSettings,
+        isInitialSplashLoading,
+        isPreviewSplash,
+        setIsPreviewSplash,
+        isPreviewMaintenance,
+        setIsPreviewMaintenance,
         isCloudSynced,
         syncAllToSupabaseCloud,
       }}

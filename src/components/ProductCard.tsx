@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { Heart, Tag } from 'lucide-react';
 import type { Product, Language } from '../types';
@@ -33,6 +33,37 @@ const cardVariants: Variants = {
   }),
 };
 
+/**
+ * Resolves the dynamic aspect ratio for any dimension (9:16, 4:3, 16:9, 1:1, 3:4, etc.)
+ */
+function getDynamicAspectRatioStyle(
+  aspectRatio?: string,
+  width?: number | null,
+  height?: number | null,
+  naturalRatio?: string | null,
+  fallbackIndex = 0
+): { aspectRatio: string } {
+  // 1. Explicit aspect_ratio column from Supabase (e.g. '9:16', '4:3', '16:9', '3:4', '1:1', '4:5')
+  if (aspectRatio && aspectRatio.trim()) {
+    const clean = aspectRatio.replace(':', '/').trim();
+    return { aspectRatio: clean };
+  }
+
+  // 2. Explicit width & height from database
+  if (width && height && width > 0 && height > 0) {
+    return { aspectRatio: `${width} / ${height}` };
+  }
+
+  // 3. Dynamically detected natural image aspect ratio (displays 100% of the image in full)
+  if (naturalRatio) {
+    return { aspectRatio: naturalRatio };
+  }
+
+  // 4. Alternating editorial fashion lookbook proportions while loading
+  const defaultRatios = ['3 / 4', '4 / 5', '9 / 16', '4 / 3'];
+  return { aspectRatio: defaultRatios[fallbackIndex % defaultRatios.length] };
+}
+
 export default function ProductCard({
   product,
   index,
@@ -45,6 +76,7 @@ export default function ProductCard({
   const [loaded, setLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [naturalRatio, setNaturalRatio] = useState<string | null>(null);
 
   const imagesList = product.images && product.images.length > 0
     ? product.images
@@ -56,7 +88,10 @@ export default function ProductCard({
   const secondaryImage = imagesList.length > 1 ? imagesList[1] : null;
 
   const { width, height } = product;
-  const ratio = width && height ? { aspectRatio: `${width} / ${height}` } : { aspectRatio: '4 / 5' };
+  const dynamicRatioStyle = useMemo(
+    () => getDynamicAspectRatioStyle(product.aspect_ratio, width, height, naturalRatio, index),
+    [product.aspect_ratio, width, height, naturalRatio, index]
+  );
   const displayTitle = lang === 'ar' && product.title_ar ? product.title_ar : product.title;
   const isAr = lang === 'ar';
 
@@ -121,10 +156,10 @@ export default function ProductCard({
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="block w-full text-start outline-none">
-        {/* Main Image Container with Precision Aspect Ratio */}
+        {/* Main Image Container with Precision Dynamic Aspect Ratio */}
         <div
-          className="relative overflow-hidden rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] transition-all duration-300 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:group-hover:shadow-[0_14px_36px_rgba(0,0,0,0.45)] group-hover:-translate-y-1"
-          style={ratio}
+          className="relative overflow-hidden rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] transition-all duration-300 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:group-hover:shadow-[0_14px_36px_rgba(0,0,0,0.45)] group-hover:-translate-y-1 w-full"
+          style={dynamicRatioStyle}
         >
           {/* Shimmer skeleton behind loading image with cross-fade fadeout */}
           {!imgError && (
@@ -148,7 +183,13 @@ export default function ProductCard({
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                onLoad={() => setLoaded(true)}
+                onLoad={(e) => {
+                  const target = e.currentTarget;
+                  if (target.naturalWidth && target.naturalHeight) {
+                    setNaturalRatio(`${target.naturalWidth} / ${target.naturalHeight}`);
+                  }
+                  setLoaded(true);
+                }}
                 onError={() => setImgError(true)}
                 className={`h-full w-full object-cover object-center transition-all duration-700 ease-out will-change-transform ${
                   availability === 'sold_out' ? 'saturate-[85%]' : ''

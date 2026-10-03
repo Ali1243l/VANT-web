@@ -1,6 +1,6 @@
 {
-  "name": "VANT Lookbook",
-  "description": "Bilingual luxury fashion lookbook with dynamic masonry grid, interactive drawer sheet, and size matrix.",
+  "name": "VANT | Editorial Streetwear Catalogue",
+  "description": "Editorial luxury streetwear and haute-couture catalogue by Maison VANT. Curated handcrafted pieces, dynamic sizing, and bespoke tailoring.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

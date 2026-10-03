@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useDragControls, type Variants } from 'framer-
 import { ChevronLeft, ChevronRight, X, Check, AlertCircle, Copy, Ruler, MessageCircle, Truck, Share2, Sparkles } from 'lucide-react';
 import { ALL_SIZES, type Product, type Language, type Size } from '../types';
 import { formatPrice } from '../lib/supabase';
+import { DEFAULT_WHATSAPP_PHONE } from '../lib/constants';
 import ShareModal from './ShareModal';
 import ProductDrawerSkeleton from './ProductDrawerSkeleton';
 import { SIZE_GUIDE_DATA, calculateRecommendedSize } from '../data/sizeGuide';
@@ -268,41 +269,44 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
       break;
   }
 
-  const whatsappText = encodeURIComponent(
-    lang === 'ar'
-      ? isSoldOut
-        ? selectedSize
-          ? `مرحباً دار ڤانت، أود الاستفسار عن إمكانية إعادة توفير مقاس (${selectedSize}) لقطعة "${displayTitle ?? ''}" (عرض منتهي - السعر: ${product ? formatPrice(product.price) : ''})`
-          : `مرحباً دار ڤانت، أود الاستفسار عن إمكانية إعادة توفير قطعة "${displayTitle ?? ''}" (عرض منتهي - السعر: ${product ? formatPrice(product.price) : ''})`
-        : availability === 'coming_soon'
-        ? selectedSize
-          ? `مرحباً دار ڤانت، أود حجز أسبقية لمقاس (${selectedSize}) من قطعة "${displayTitle ?? ''}" (قريباً - السعر: ${product ? formatPrice(product.price) : ''})`
-          : `مرحباً دار ڤانت، أود الاستفسار وحجز أسبقية لقطعة "${displayTitle ?? ''}" (قريباً - السعر: ${product ? formatPrice(product.price) : ''})`
-        : selectedSize
-        ? `مرحباً دار ڤانت، أود طلب قطعة "${displayTitle ?? ''}" بمقاس (${selectedSize}) (السعر: ${product ? formatPrice(product.price) : ''})`
-        : `مرحباً دار ڤانت، أود الاستفسار والطلب لقطعة "${displayTitle ?? ''}" (السعر: ${product ? formatPrice(product.price) : ''})`
-      : isSoldOut
+  const productCode = product?.id ? `#${product.id}` : '';
+  const formattedProductPrice = product ? formatPrice(product.price) : '';
+
+  const whatsappMessage = lang === 'ar'
+    ? isSoldOut
       ? selectedSize
-        ? `Hello Maison VANT, I would like to inquire about restocking size (${selectedSize}) for "${displayTitle ?? ''}" (Sold Out - Price: ${product ? formatPrice(product.price) : ''})`
-        : `Hello Maison VANT, I would like to inquire about restocking "${displayTitle ?? ''}" (Sold Out - Price: ${product ? formatPrice(product.price) : ''})`
+        ? `مرحباً دار ڤانت، أود الاستفسار عن إمكانية إعادة توفير مقاس (${selectedSize}) لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+        : `مرحباً دار ڤانت، أود الاستفسار عن إمكانية إعادة توفير قطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
       : availability === 'coming_soon'
       ? selectedSize
-        ? `Hello Maison VANT, I would like to pre-register size (${selectedSize}) for "${displayTitle ?? ''}" (Coming Soon - Price: ${product ? formatPrice(product.price) : ''})`
-        : `Hello Maison VANT, I would like to pre-register/inquire about "${displayTitle ?? ''}" (Coming Soon - Price: ${product ? formatPrice(product.price) : ''})`
+        ? `مرحباً دار ڤانت، أود حجز أسبقية لمقاس (${selectedSize}) من قطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+        : `مرحباً دار ڤانت، أود الاستفسار وحجز أسبقية لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
       : selectedSize
-      ? `Hello Maison VANT, I would like to order "${displayTitle ?? ''}" in size (${selectedSize}) (Price: ${product ? formatPrice(product.price) : ''})`
-      : `Hello Maison VANT, I would like to order/inquire about "${displayTitle ?? ''}" (Price: ${product ? formatPrice(product.price) : ''})`
-  );
-  const targetPhone = (whatsappPhoneControl?.actionValue || '').replace(/[^0-9]/g, '');
-  const whatsappUrl = targetPhone ? `https://wa.me/${targetPhone}?text=${whatsappText}` : `https://wa.me/?text=${whatsappText}`;
+      ? `مرحباً دار ڤانت، أود طلب قطعة "${displayTitle ?? ''}" بمقاس (${selectedSize}) (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+      : `مرحباً دار ڤانت، أود الاستفسار والطلب لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+    : isSoldOut
+    ? selectedSize
+      ? `Hello Maison VANT, I would like to inquire about restocking size (${selectedSize}) for "${displayTitle ?? ''}" (Code: ${productCode} - Price: ${formattedProductPrice})`
+      : `Hello Maison VANT, I would like to inquire about restocking "${displayTitle ?? ''}" (Code: ${productCode} - Price: ${formattedProductPrice})`
+    : availability === 'coming_soon'
+    ? selectedSize
+      ? `Hello Maison VANT, I would like to pre-register size (${selectedSize}) for "${displayTitle ?? ''}" (Code: ${productCode} - Price: ${formattedProductPrice})`
+      : `Hello Maison VANT, I would like to pre-register/inquire about "${displayTitle ?? ''}" (Code: ${productCode} - Price: ${formattedProductPrice})`
+    : selectedSize
+    ? `Hello Maison VANT, I would like to order "${displayTitle ?? ''}" in size (${selectedSize}) (Code: ${productCode} - Price: ${formattedProductPrice})`
+    : `Hello Maison VANT, I would like to order/inquire about "${displayTitle ?? ''}" (Code: ${productCode} - Price: ${formattedProductPrice})`;
+
+  const whatsappText = encodeURIComponent(whatsappMessage);
+  const targetPhone = (whatsappPhoneControl?.actionValue || '').replace(/[^0-9]/g, '') || DEFAULT_WHATSAPP_PHONE;
+  const whatsappUrl = `https://wa.me/${targetPhone}?text=${whatsappText}`;
 
   const bespokeWhatsappText = encodeURIComponent(
     lang === 'ar'
-      ? `مرحباً دار ڤانت، أود الاستفسار عن خدمة التفصيل الخاص (Made-to-Measure) لقطعة "${displayTitle ?? ''}" (الطول: ${calcHeight} سم، الوزن: ${calcWeight} كغم، السعر: ${product ? formatPrice(product.price) : ''})`
-      : `Hello Maison VANT, I would like to inquire about Made-to-Measure bespoke tailoring for "${displayTitle ?? ''}" (Height: ${calcHeight} cm, Weight: ${calcWeight} kg, Price: ${product ? formatPrice(product.price) : ''})`
+      ? `مرحباً دار ڤانت، أود الاستفسار عن خدمة التفصيل الخاص (Made-to-Measure) لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - الطول: ${calcHeight} سم، الوزن: ${calcWeight} كغم، السعر: ${formattedProductPrice})`
+      : `Hello Maison VANT, I would like to inquire about Made-to-Measure bespoke tailoring for "${displayTitle ?? ''}" (Code: ${productCode} - Height: ${calcHeight} cm, Weight: ${calcWeight} kg, Price: ${formattedProductPrice})`
   );
-  const targetBespokePhone = (bespokePhoneControl?.actionValue || '').replace(/[^0-9]/g, '');
-  const bespokeWhatsappUrl = targetBespokePhone ? `https://wa.me/${targetBespokePhone}?text=${bespokeWhatsappText}` : `https://wa.me/?text=${bespokeWhatsappText}`;
+  const targetBespokePhone = (bespokePhoneControl?.actionValue || '').replace(/[^0-9]/g, '') || targetPhone;
+  const bespokeWhatsappUrl = `https://wa.me/${targetBespokePhone}?text=${bespokeWhatsappText}`;
 
   const handleCopyTitle = async () => {
     if (!displayTitle) return;

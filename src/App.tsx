@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import CategoryFilter, { type AvailabilityFilterType } from './components/CategoryFilter';
 import WelcomeHeroBanner from './components/WelcomeHeroBanner';
@@ -9,12 +9,14 @@ import ProductDrawer from './components/ProductDrawer';
 import ImagePreloader from './components/ImagePreloader';
 import BackToTop from './components/BackToTop';
 import AdminDrawer from './components/AdminDrawer';
+import SplashLoader from './components/SplashLoader';
+import MaintenanceScreen from './components/MaintenanceScreen';
 import { SiteControlsProvider, useSiteControls } from './context/SiteControlsContext';
 import { trackEvent } from './lib/analytics';
 import { useProducts } from './hooks/useProducts';
 import { useWishlist } from './hooks/useWishlist';
 import { productMatchesQuery } from './lib/search';
-import { Heart } from 'lucide-react';
+import { Heart, Loader2 } from 'lucide-react';
 import type { Product, Language, Theme } from './types';
 
 const ALL = 'All';
@@ -29,9 +31,48 @@ const CATEGORY_TRANSLATIONS: Record<string, { en: string; ar: string }> = {
 };
 
 function MainApp() {
-  const { setIsAdminOpen } = useSiteControls();
-  const { products, loading, error, isLiveDatabase, refresh } = useProducts();
+  const {
+    setIsAdminOpen,
+    siteSettings,
+    isInitialSplashLoading,
+    isPreviewSplash,
+    setIsPreviewSplash,
+    isPreviewMaintenance,
+    setIsPreviewMaintenance,
+    isAdminUnlocked,
+    unlockAdmin,
+  } = useSiteControls();
+  const {
+    products,
+    loading,
+    loadingMore,
+    hasMore,
+    totalProductsCount,
+    error,
+    isLiveDatabase,
+    refresh,
+    loadMore,
+  } = useProducts();
   const { wishlist, wishlistCount, isWishlisted, toggleWishlist } = useWishlist();
+
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+
+  // Once-only splash screen lock for session to prevent double-render flashes
+  const [hasFinishedSplash, setHasFinishedSplash] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        return sessionStorage.getItem('vant_splash_shown_v1') === 'true';
+      }
+    } catch {}
+    return false;
+  });
+
+  const handleSplashFinished = useCallback(() => {
+    setHasFinishedSplash(true);
+    try {
+      sessionStorage.setItem('vant_splash_shown_v1', 'true');
+    } catch {}
+  }, []);
 
   const [lang, setLang] = useState<Language>('ar');
   const [theme, setTheme] = useState<Theme>(() => {
@@ -52,6 +93,24 @@ function MainApp() {
       return true;
     }
   });
+
+  // Intersection Observer for Infinite Scrolling to fetch the next batch when reaching bottom
+  useEffect(() => {
+    const target = loadMoreSentinelRef.current;
+    if (!target || !hasMore || loading || loadingMore || isWishlistOnly || searchQuery.trim()) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          loadMore();
+        }
+      },
+      { rootMargin: '350px 0px' }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, loadMore, isWishlistOnly, searchQuery]);
 
   // Track initial page view telemetry
   useEffect(() => {
@@ -196,12 +255,56 @@ function MainApp() {
 
   const closeDrawer = useCallback(() => setSelected(null), []);
 
+  const showSplash = !hasFinishedSplash || isPreviewSplash;
+  const showMaintenance = siteSettings.maintenance_mode && !isAdminUnlocked && !isPreviewMaintenance;
+
   return (
-    <div
-      className={`relative min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden ${
-        theme === 'dark' ? 'bg-[#0d0f12] text-[#f3f4f6]' : 'bg-[#f8f9fa] text-[#15171c]'
-      }`}
-    >
+    <>
+      {/* Root Cinematic Splash / Preloader Screen (Shows once on launch or when tested via Admin) */}
+      {showSplash && (
+        <SplashLoader
+          isLoading={isInitialSplashLoading}
+          loadingTextEn={siteSettings.loading_text_en}
+          loadingTextAr={siteSettings.loading_text_ar}
+          motif={siteSettings.splash_motif}
+          isPreview={isPreviewSplash}
+          onClosePreview={() => setIsPreviewSplash(false)}
+          onFinished={handleSplashFinished}
+        />
+      )}
+
+      {/* Interactive Maintenance Screen Preview Overlay (Triggered from Admin Test Button) */}
+      {isPreviewMaintenance && (
+        <MaintenanceScreen
+          maintenanceMessage={siteSettings.maintenance_message}
+          maintenanceMessageAr={siteSettings.maintenance_message_ar}
+          isPreview={true}
+          onClosePreview={() => setIsPreviewMaintenance(false)}
+          onAdminUnlock={unlockAdmin}
+          onBypass={() => {
+            setIsPreviewMaintenance(false);
+            setIsAdminOpen(true);
+          }}
+        />
+      )}
+
+      {/* Real High-Fashion Maintenance Mode (Bypassed if Admin is authenticated) */}
+      {showMaintenance ? (
+        <>
+          <MaintenanceScreen
+            maintenanceMessage={siteSettings.maintenance_message}
+            maintenanceMessageAr={siteSettings.maintenance_message_ar}
+            onAdminUnlock={unlockAdmin}
+            onBypass={() => setIsAdminOpen(true)}
+          />
+          <AdminDrawer lang={lang} />
+        </>
+      ) : (
+        <div
+          className={`relative min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden ${
+            theme === 'dark' ? 'bg-[#0d0f12] text-[#f3f4f6]' : 'bg-[#f8f9fa] text-[#15171c]'
+          }`}
+        >
       {/* Luxury Ambient Lighting Glow Orbs */}
       <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 h-[520px] w-[850px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,74,215,0.06),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.08),transparent_70%)] blur-3xl animate-luxury-glow" />
       <div className="pointer-events-none absolute top-[40%] ltr:-right-48 rtl:-left-48 h-[400px] w-[400px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.03),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.04),transparent_70%)] blur-3xl" />
@@ -355,6 +458,37 @@ function MainApp() {
                 });
               }}
             />
+
+            {/* Pagination / Infinite Scroll Load More Action */}
+            {!isWishlistOnly && !searchQuery.trim() && (hasMore || loadingMore) && (
+              <div className="mt-2 mb-12 flex flex-col items-center justify-center gap-3 select-none">
+                <button
+                  type="button"
+                  onClick={() => loadMore()}
+                  disabled={loadingMore}
+                  className="inline-flex items-center justify-center gap-2.5 rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] px-8 py-3 text-xs sm:text-sm font-semibold text-[#15171c] dark:text-white shadow-sm hover:border-[#004ad7] dark:hover:border-[#3b82f6] hover:text-[#004ad7] dark:hover:text-[#3b82f6] transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+                  aria-label={lang === 'ar' ? 'تحميل المزيد من التشكيلة' : 'Load more pieces'}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-[#004ad7] dark:text-[#3b82f6]" />
+                      <span>{lang === 'ar' ? 'جاري استعراض المزيد من القطع...' : 'Loading more pieces...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{lang === 'ar' ? 'استعراض المزيد من القطع' : 'Load More Pieces'}</span>
+                      {totalProductsCount > 0 && (
+                        <span className="text-[10.5px] text-black/45 dark:text-white/40 font-mono font-medium">
+                          ({products.length} / {totalProductsCount})
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+                {/* Invisible Intersection Observer Trigger */}
+                <div ref={loadMoreSentinelRef} className="h-4 w-full opacity-0 pointer-events-none" />
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -378,6 +512,8 @@ function MainApp() {
       {/* Secret Admin Control Drawer (Triggered via Shift+A, typing 'admin', or footer 3-tap) */}
       <AdminDrawer lang={lang} />
     </div>
+    )}
+    </>
   );
 }
 
