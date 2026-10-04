@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SplashMotifType } from '../context/SiteControlsContext';
+import type { Theme } from '../types';
 
 export interface MotifOption {
   id: SplashMotifType;
@@ -15,21 +16,21 @@ export const AVAILABLE_SPLASH_MOTIFS: MotifOption[] = [
     id: 'print_press',
     titleAr: 'ماكينة السكرين برنت والطباعة الحرارية',
     titleEn: 'Screen Print Squeegee & Laser Press',
-    subtitleAr: 'ماسحة الحبر وسحب طباعة الشعار الحرارية مباشرة على تيشيرت الدار',
+    subtitleAr: 'سحب مساحة الحبر وطباعة شعار ڤانت مباشرة على قماش التيشيرت بالليزر',
     subtitleEn: 'Laser print squeegee pass stamping VANT emblem onto garment fabric',
   },
   {
     id: 'tshirt_print',
-    titleAr: 'تيشيرت الدار وطباعة الشعار المباشرة',
+    titleAr: 'تيشيرت ڤانت وطباعة الشعار الأرشيفية',
     titleEn: 'VANT Streetwear T-Shirt & DTG Print',
-    subtitleAr: 'قصّة تيشيرت الأوفرسايز الفاخرة مع طباعة الشعار على الصدر بالليزر',
+    subtitleAr: 'قصّة تيشيرت الأوفرسايز الفاخرة مع دروز الياقة وطباعة الشعار على الصدر',
     subtitleEn: 'Luxury streetwear crewneck silhouette with chest emblem graphic print',
   },
   {
     id: 'embroidery',
     titleAr: 'تطريز الخيط الملكي وإطار الأتيليه',
     titleEn: 'Atelier Embroidery Hoop & Stitches',
-    subtitleAr: 'طارة التطريز اليدوي الفاخرة وإبرة غرز الخيوط المتقاطعة',
+    subtitleAr: 'طارة التطريز اليدوي الفاخرة وإبرة حياكة الغرز المتقاطعة الدقيقة',
     subtitleEn: 'Royal embroidery hoop with needle stitching gold and cobalt crest',
   },
   {
@@ -41,7 +42,7 @@ export const AVAILABLE_SPLASH_MOTIFS: MotifOption[] = [
   },
   {
     id: 'needle_thread',
-    titleAr: 'إبرة الحياكة والخيط المنساب',
+    titleAr: 'إبرة الحياكة وخيط الحرير المنساب',
     titleEn: 'Sartorial Needle & Silk Thread',
     subtitleAr: 'إبرة خياطة فضية تحيك تموجات الحرير الملكية وغرز الأتيليه',
     subtitleEn: 'Silver tailor needle weaving cobalt silk waves and stitches',
@@ -74,335 +75,644 @@ interface Props {
   loadingTextEn?: string;
   loadingTextAr?: string;
   motif?: SplashMotifType;
+  theme?: Theme;
+  onToggleTheme?: () => void;
   isPreview?: boolean;
   onClosePreview?: () => void;
   onFinished?: () => void;
 }
 
-function FashionMotifGraphic({ motif }: { motif: SplashMotifType }) {
+/**
+ * Bold, Clean Chiseled Luxury V Monogram (Haute-Couture Architectural Typography)
+ * Completely removed any cutting lines, slashes, or crystals; pure, prestigious typographic clarity.
+ */
+function ChiseledLuxuryV({
+  isDark,
+  cobalt,
+  mainStroke,
+  delay = 0.35,
+}: {
+  isDark: boolean;
+  cobalt: string;
+  mainStroke: string;
+  delay?: number;
+}) {
+  return (
+    <motion.g
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 24, delay }}
+    >
+      {/* Soft Ambient Print Aura behind the V (Calibrated for Dark & Light Mode) */}
+      <motion.ellipse
+        cx="50"
+        cy="48"
+        rx="16"
+        ry="11"
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{
+          opacity: isDark ? [0.15, 0.45, 0.15] : [0.08, 0.22, 0.08],
+          scale: [0.85, 1.25, 0.85],
+        }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay }}
+        fill={cobalt}
+        className="blur-md pointer-events-none"
+      />
+
+      {/* Left Serif (Top) */}
+      <motion.line
+        x1="36"
+        y1="33"
+        x2="45"
+        y2="33"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.5, delay: delay + 0.1, ease: [0.16, 1, 0.3, 1] }}
+        stroke={cobalt}
+        strokeWidth="2.8"
+        strokeLinecap="round"
+      />
+
+      {/* Bold Architectural Left Stem */}
+      <motion.line
+        x1="41"
+        y1="33"
+        x2="50"
+        y2="62"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.65, delay: delay + 0.15, ease: [0.16, 1, 0.3, 1] }}
+        stroke={cobalt}
+        strokeWidth="3.8"
+        strokeLinecap="round"
+      />
+
+      {/* Right Serif (Top) */}
+      <motion.line
+        x1="55"
+        y1="33"
+        x2="64"
+        y2="33"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.5, delay: delay + 0.1, ease: [0.16, 1, 0.3, 1] }}
+        stroke={mainStroke}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+
+      {/* Refined Hairline Right Stem */}
+      <motion.line
+        x1="59"
+        y1="33"
+        x2="50"
+        y2="62"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 0.65, delay: delay + 0.15, ease: [0.16, 1, 0.3, 1] }}
+        stroke={mainStroke}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </motion.g>
+  );
+}
+
+function FashionMotifGraphic({ motif, isDark }: { motif: SplashMotifType; isDark: boolean }) {
+  const mainStroke = isDark ? '#ffffff' : '#090a0f';
+  const subStroke = isDark ? '#94a3b8' : '#334155';
+  const faintStroke = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(9,10,15,0.22)';
+  const cobalt = isDark ? '#3b82f6' : '#004ad7';
+  const garmentFill = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(9,10,15,0.025)';
+
+  // 1. Screen Print Squeegee & Laser Heat Press on Authentic Streetwear Tee
   if (motif === 'print_press') {
     return (
-      <div className="relative flex items-center justify-center h-20 w-28">
-        <svg viewBox="0 0 100 70" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* T-shirt background outline */}
-          <motion.path
-            d="M30 18 L40 12 C44 18 56 18 60 12 L70 18 L64 26 L58 24 L58 58 L42 58 L42 24 L36 26 Z"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.7, ease: 'easeOut' }}
-            className="stroke-white/40"
+      <motion.div
+        animate={{ y: [0, -3.5, 0] }}
+        transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
+        className={`relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 ${
+          isDark
+            ? 'filter drop-shadow-[0_12px_28px_rgba(59,130,246,0.18)]'
+            : 'filter drop-shadow-[0_12px_28px_rgba(0,74,215,0.10)]'
+        }`}
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Subtle Garment Fill (Underneath, No Center Stroke) */}
+          <path
+            d="M50 25 C40 25 34 22 34 18 L14 27 L17 47 L28 42 L27 82 Q50 86 73 82 L72 42 L83 47 L86 27 L66 18 C60 22 40 25 50 25 Z"
+            fill={garmentFill}
+            stroke="none"
           />
-          {/* Printed VANT Chest Emblem Stamped Line */}
+
+          {/* Left Half of T-Shirt Silhouette (Outer boundary only, NO center line) */}
           <motion.path
-            d="M45 28 L50 38 L55 28"
+            d="M50 25 C40 25 34 22 34 18 L14 27 L17 47 L28 42 L27 82 Q38 85 50 86"
+            fill="none"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.35, ease: 'easeInOut' }}
-            strokeWidth="2.5"
-            className="stroke-[#3b82f6]"
+            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+            stroke={mainStroke}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          {/* Squeegee Bar sliding vertically */}
-          <motion.g
-            animate={{ y: [-10, 14, -10] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <line x1="32" y1="28" x2="68" y2="28" className="stroke-[#3b82f6]" strokeWidth="3" />
-            <rect x="42" y="22" width="16" height="6" rx="1" className="fill-[#3b82f6] stroke-[#3b82f6]" />
-          </motion.g>
+
+          {/* Right Half of T-Shirt Silhouette (Outer boundary only, NO center line) */}
+          <motion.path
+            d="M50 25 C60 25 66 22 66 18 L86 27 L83 47 L72 42 L73 82 Q62 85 50 86"
+            fill="none"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+            stroke={mainStroke}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Ribbed Collar Band */}
+          <motion.path
+            d="M34 18 C40 25 60 25 66 18"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+            stroke={cobalt}
+            strokeWidth="2.6"
+            strokeLinecap="round"
+          />
+
+          {/* Back Collar Line */}
+          <motion.path
+            d="M34 18 C42 14 58 14 66 18"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 0.6 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            stroke={subStroke}
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+
+          {/* Sleeve Fold Lines */}
+          <motion.line
+            x1="16" y1="43" x2="26" y2="39"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ delay: 0.45 }}
+            stroke={subStroke}
+            strokeWidth="1.2"
+            strokeDasharray="1.5 1.5"
+          />
+          <motion.line
+            x1="84" y1="43" x2="74" y2="39"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ delay: 0.45 }}
+            stroke={subStroke}
+            strokeWidth="1.2"
+            strokeDasharray="1.5 1.5"
+          />
+
+          {/* Bottom Hem Stitching */}
+          <motion.path
+            d="M28 80 Q50 84 72 80"
+            initial={{ opacity: 0, pathLength: 0 }}
+            animate={{ opacity: 0.7, pathLength: 1 }}
+            transition={{ delay: 0.5, duration: 0.4 }}
+            stroke={subStroke}
+            strokeWidth="1.2"
+            strokeDasharray="2 1.5"
+          />
+
+          {/* Chiseled Roman V Monogram on Chest */}
+          <ChiseledLuxuryV
+            isDark={isDark}
+            cobalt={cobalt}
+            mainStroke={mainStroke}
+            delay={0.35}
+          />
         </svg>
-        <div className="absolute bottom-2 h-1 w-12 bg-[#3b82f6]/30 blur-md rounded-full animate-pulse" />
-      </div>
+
+        {/* Ambient Print Curing Glow */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className={`absolute bottom-2 h-3 w-20 rounded-full blur-md ${isDark ? 'bg-[#3b82f6]/30' : 'bg-[#004ad7]/20'} animate-pulse`}
+        />
+      </motion.div>
     );
   }
 
+  // 2. VANT Streetwear Crewneck T-Shirt & DTG Print (Iconic, Simple, Clear)
   if (motif === 'tshirt_print') {
     return (
-      <div className="relative flex items-center justify-center h-20 w-28">
-        <svg viewBox="0 0 100 70" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* Crewneck T-Shirt Contour */}
-          <motion.path
-            d="M28 20 L40 12 C45 18 55 18 60 12 L72 20 L65 29 L58 26 L58 60 L42 60 L42 26 L35 29 Z"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="stroke-white/90"
+      <motion.div
+        animate={{ y: [0, -3.5, 0] }}
+        transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
+        className={`relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 ${
+          isDark
+            ? 'filter drop-shadow-[0_12px_28px_rgba(59,130,246,0.18)]'
+            : 'filter drop-shadow-[0_12px_28px_rgba(0,74,215,0.10)]'
+        }`}
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Subtle Garment Fill (Underneath, No Center Stroke) */}
+          <path
+            d="M50 25 C40 25 34 22 34 18 L14 27 L17 47 L28 42 L27 82 Q50 86 73 82 L72 42 L83 47 L86 27 L66 18 C60 22 40 25 50 25 Z"
+            fill={garmentFill}
+            stroke="none"
           />
-          {/* Collar seam */}
+
+          {/* Left Half of T-Shirt Silhouette (Outer boundary only, NO center line) */}
           <motion.path
-            d="M40 12 C45 18 55 18 60 12"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="stroke-[#3b82f6]"
-          />
-          {/* Laser DTG Printed Logo Emblem */}
-          <motion.path
-            d="M44 32 L50 44 L56 32"
+            d="M50 25 C40 25 34 22 34 18 L14 27 L17 47 L28 42 L27 82 Q38 85 50 86"
+            fill="none"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4, ease: 'easeInOut' }}
-            strokeWidth="2.8"
-            className="stroke-[#3b82f6]"
+            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+            stroke={mainStroke}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          {/* Chest Pocket Frame */}
-          <motion.rect
-            x="52" y="29" width="8" height="10" rx="1"
+
+          {/* Right Half of T-Shirt Silhouette (Outer boundary only, NO center line) */}
+          <motion.path
+            d="M50 25 C60 25 66 22 66 18 L86 27 L83 47 L72 42 L73 82 Q62 85 50 86"
+            fill="none"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+            stroke={mainStroke}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Ribbed Crewneck Collar */}
+          <motion.path
+            d="M34 18 C40 25 60 25 66 18"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+            stroke={cobalt}
+            strokeWidth="2.6"
+            strokeLinecap="round"
+          />
+
+          {/* Back Collar Line */}
+          <motion.path
+            d="M34 18 C42 14 58 14 66 18"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 0.6 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            stroke={subStroke}
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+
+          {/* Clean Sleeve Stitch Accents */}
+          <motion.line
+            x1="16" y1="43" x2="26" y2="39"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.4 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ delay: 0.45 }}
+            stroke={subStroke}
+            strokeWidth="1.2"
+            strokeDasharray="1.5 1.5"
+          />
+          <motion.line
+            x1="84" y1="43" x2="74" y2="39"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.7 }}
+            transition={{ delay: 0.45 }}
+            stroke={subStroke}
+            strokeWidth="1.2"
+            strokeDasharray="1.5 1.5"
+          />
+
+          {/* Bottom Hem Double Stitch Line */}
+          <motion.path
+            d="M28 80 Q50 84 72 80"
+            initial={{ opacity: 0, pathLength: 0 }}
+            animate={{ opacity: 0.7, pathLength: 1 }}
+            transition={{ delay: 0.5, duration: 0.4 }}
+            stroke={subStroke}
+            strokeWidth="1.2"
+            strokeDasharray="2 1.5"
+          />
+
+          {/* Screen Print Registration Corner Markers */}
+          <motion.g
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.65 }}
             transition={{ delay: 0.5 }}
-            strokeWidth="1"
-            className="stroke-white/60"
+            stroke={faintStroke}
+            strokeWidth="1.2"
+          >
+            <path d="M35 34 H38 M35 34 V37" />
+            <path d="M65 34 H62 M65 34 V37" />
+            <path d="M35 64 H38 M35 64 V61" />
+            <path d="M65 64 H62 M65 64 V61" />
+          </motion.g>
+
+          {/* Chiseled Roman V Monogram on Chest */}
+          <ChiseledLuxuryV
+            isDark={isDark}
+            cobalt={cobalt}
+            mainStroke={mainStroke}
+            delay={0.35}
           />
         </svg>
-      </div>
+
+        {/* Dynamic Fabric Print Sheen Sweep */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-16 rounded-full blur-xl pointer-events-none ${isDark ? 'bg-[#3b82f6]/15' : 'bg-[#004ad7]/10'} animate-pulse`}
+        />
+      </motion.div>
     );
   }
 
+  // 3. Royal Atelier Embroidery Hoop & Stitches
   if (motif === 'embroidery') {
     return (
-      <div className="relative flex items-center justify-center h-20 w-28">
-        <svg viewBox="0 0 100 70" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* Embroidery Hoop Circle */}
+      <motion.div
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36"
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Outer Bamboo Embroidery Hoop */}
           <motion.circle
             cx="50"
-            cy="35"
-            r="24"
+            cy="50"
+            r="32"
             initial={{ pathLength: 0, rotate: -90 }}
             animate={{ pathLength: 1, rotate: 0 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="stroke-white/70"
-            strokeWidth="2.2"
+            transition={{ duration: 0.9, ease: 'easeOut' }}
+            stroke={mainStroke}
+            strokeWidth="2.6"
           />
-          {/* Hoop Screw Clamp */}
+          {/* Hoop Metal Screw Tightener */}
           <motion.rect
-            x="46" y="7" width="8" height="5" rx="1"
+            x="44"
+            y="12"
+            width="12"
+            height="6"
+            rx="1.5"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="stroke-[#3b82f6] fill-[#3b82f6]"
+            fill={cobalt}
+            stroke={cobalt}
           />
-          {/* Embroidered V Logo inside */}
-          <motion.path
-            d="M40 28 L50 44 L60 28"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.7, delay: 0.35, ease: 'easeInOut' }}
-            strokeWidth="2.8"
-            className="stroke-[#3b82f6]"
+          <line x1="42" y1="15" x2="58" y2="15" stroke={mainStroke} strokeWidth="1.6" />
+
+          {/* Chiseled Monogram V Embroidered inside Fabric */}
+          <ChiseledLuxuryV
+            isDark={isDark}
+            cobalt={cobalt}
+            mainStroke={mainStroke}
+            delay={0.25}
           />
-          {/* Needle Cross Stitches */}
+
+          {/* Fine Embroidery Cross Stitches Around Hoop Fabric */}
           <motion.path
-            d="M34 32 L38 38 M38 32 L34 38 M62 32 L66 38 M66 32 L62 38"
+            d="M32 46 L36 50 M36 46 L32 50 M64 46 L68 50 M68 46 L64 50 M48 30 L52 34 M52 30 L48 34 M48 70 L52 74 M52 70 L48 74"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-            transition={{ delay: 0.5 }}
-            strokeWidth="1.2"
-            className="stroke-white/80"
+            animate={{ opacity: 0.75 }}
+            transition={{ delay: 0.55 }}
+            stroke={subStroke}
+            strokeWidth="1.4"
           />
         </svg>
-      </div>
+      </motion.div>
     );
   }
 
-  if (motif === 'needle_thread') {
+  // 4. Architectural Coat Hanger & Silk Drape
+  if (motif === 'hanger') {
     return (
-      <div className="relative flex items-center justify-center h-16 w-24">
-        <svg viewBox="0 0 100 60" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* Needle Body */}
+      <motion.div
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36"
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Chrome Swivel Hook */}
           <motion.path
-            d="M25 45 L70 15"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-            strokeWidth="2.5"
-            className="stroke-white"
-          />
-          {/* Needle Eyelet */}
-          <motion.ellipse
-            cx="68"
-            cy="16.5"
-            rx="2.5"
-            ry="1.2"
-            transform="rotate(-33 68 16.5)"
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-            className="stroke-[#3b82f6] fill-[#3b82f6]/20"
-          />
-          {/* Flowing Cobalt Silk Thread */}
-          <motion.path
-            d="M68 16.5 Q85 10 78 28 T50 35 T20 48 T10 40"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.9, delay: 0.2, ease: 'easeInOut' }}
-            className="stroke-[#3b82f6]"
-            strokeWidth="2"
-          />
-          {/* Subtle Cross Stitches */}
-          <motion.path
-            d="M32 30 L38 36 M38 30 L32 36 M52 42 L58 48 M58 42 L52 48"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.4 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            strokeWidth="1.2"
-            className="stroke-white/60"
-          />
-        </svg>
-        <div className="absolute top-[14px] right-[24px] h-1.5 w-1.5 rounded-full bg-[#3b82f6] shadow-[0_0_8px_#3b82f6] animate-pulse" />
-      </div>
-    );
-  }
-
-  if (motif === 'mannequin') {
-    return (
-      <div className="relative flex items-center justify-center h-16 w-24">
-        <svg viewBox="0 0 100 65" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* Neck Finial */}
-          <motion.circle
-            cx="50"
-            cy="10"
-            r="3"
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.4 }}
-            className="stroke-[#3b82f6] fill-[#3b82f6]/30"
-          />
-          <motion.line x1="50" y1="13" x2="50" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} />
-          {/* Torso Silhouette */}
-          <motion.path
-            d="M36 19 C38 28 42 32 40 46 L60 46 C58 32 62 28 64 19 Z"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.8, delay: 0.1, ease: 'easeOut' }}
-            className="stroke-white/90"
-          />
-          {/* Draped Measuring Tape */}
-          <motion.path
-            d="M38 23 Q50 34 62 23 M42 36 Q50 42 58 36"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.7, delay: 0.35, ease: 'easeInOut' }}
-            className="stroke-[#3b82f6]"
-            strokeDasharray="2 2"
-          />
-          {/* Stand Base */}
-          <motion.line x1="50" y1="46" x2="50" y2="58" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.3 }} />
-          <motion.line x1="42" y1="58" x2="58" y2="58" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.4 }} className="stroke-white/60" />
-        </svg>
-      </div>
-    );
-  }
-
-  if (motif === 'monogram') {
-    return (
-      <div className="relative flex items-center justify-center h-16 w-24">
-        <svg viewBox="0 0 100 60" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* Outer Diamond Shield */}
-          <motion.polygon
-            points="50,8 80,30 50,52 20,30"
-            initial={{ pathLength: 0, rotate: -10 }}
-            animate={{ pathLength: 1, rotate: 0 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="stroke-white/80"
-          />
-          {/* Inner Monogram V */}
-          <motion.path
-            d="M36 22 L50 42 L64 22"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.6, delay: 0.25, ease: 'easeOut' }}
-            strokeWidth="2.8"
-            className="stroke-white"
-          />
-          {/* Center Cobalt Accent Diamond */}
-          <motion.polygon
-            points="50,22 55,27 50,32 45,27"
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.45 }}
-            className="stroke-[#3b82f6] fill-[#3b82f6]"
-          />
-          {/* Subtle Outer Orbital Arc */}
-          <motion.path
-            d="M15 30 A38 18 0 0 1 85 30"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 0.4 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            className="stroke-[#3b82f6]"
-            strokeDasharray="3 3"
-          />
-        </svg>
-      </div>
-    );
-  }
-
-  if (motif === 'scissors') {
-    return (
-      <div className="relative flex items-center justify-center h-16 w-24">
-        <svg viewBox="0 0 100 60" className="h-full w-full stroke-white fill-none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {/* Scissors Left Blade & Loop */}
-          <motion.path
-            d="M26 44 C20 44 20 36 26 36 C30 36 36 40 48 29 L76 14"
+            d="M50 24 C50 15 58 11 64 16 C69 22 62 30 50 33 L50 38"
             initial={{ pathLength: 0 }}
             animate={{ pathLength: 1 }}
             transition={{ duration: 0.7, ease: 'easeOut' }}
-            className="stroke-white/90"
+            stroke={cobalt}
+            strokeWidth="2.8"
           />
-          {/* Scissors Right Blade & Loop */}
+          {/* Sculpted Wood Coat Hanger Shoulders */}
           <motion.path
-            d="M26 16 C20 16 20 24 26 24 C30 24 36 20 48 31 L76 46"
+            d="M50 38 L14 60 C9 63 13 67 20 67 L80 67 C87 67 91 63 86 60 Z"
             initial={{ pathLength: 0 }}
             animate={{ pathLength: 1 }}
-            transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
-            className="stroke-white/90"
+            transition={{ duration: 0.8, delay: 0.15, ease: 'easeOut' }}
+            stroke={mainStroke}
+            strokeWidth="2.6"
           />
-          {/* Pivot Screw */}
-          <motion.circle cx="48" cy="30" r="2" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 }} className="fill-[#3b82f6] stroke-[#3b82f6]" />
-          {/* Silk Drape Guide Line */}
+          {/* Flowing Silk Drape Line */}
           <motion.path
-            d="M56 30 Q70 26 84 30"
+            d="M26 67 Q50 76 74 67"
             initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 0.6 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="stroke-[#3b82f6]"
-            strokeDasharray="2 2"
+            animate={{ pathLength: 1, opacity: 0.8 }}
+            transition={{ duration: 0.7, delay: 0.35, ease: 'easeInOut' }}
+            stroke={cobalt}
+            strokeWidth="2.2"
           />
         </svg>
-      </div>
+        {/* Center Faceted Diamond Stud */}
+        <div className={`absolute top-[40px] left-1/2 -translate-x-1/2 h-2.5 w-2.5 rotate-45 ${isDark ? 'bg-[#3b82f6] shadow-[0_0_12px_#3b82f6]' : 'bg-[#004ad7] shadow-[0_0_10px_#004ad7]'}`} />
+      </motion.div>
     );
   }
 
-  // Default: Hanger
+  // 5. Sartorial Tailor Needle & Silk Thread
+  if (motif === 'needle_thread') {
+    return (
+      <motion.div
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36"
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Polished Sewing Needle */}
+          <motion.path
+            d="M26 72 L78 26"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
+            stroke={mainStroke}
+            strokeWidth="3"
+          />
+          {/* Needle Eyelet */}
+          <motion.ellipse
+            cx="76"
+            cy="28"
+            rx="3.4"
+            ry="1.6"
+            transform="rotate(-40 76 28)"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            stroke={cobalt}
+            fill={cobalt}
+          />
+          {/* Undulating Cobalt Silk Thread Wave */}
+          <motion.path
+            d="M76 28 Q96 18 88 40 T54 48 T20 62 T10 52"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 1, delay: 0.2, ease: 'easeInOut' }}
+            stroke={cobalt}
+            strokeWidth="2.6"
+          />
+          {/* Stitch Seam Guidelines */}
+          <motion.path
+            d="M32 50 L38 56 M38 50 L32 56 M58 64 L64 70 M64 64 L58 70"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.55 }}
+            transition={{ delay: 0.5 }}
+            stroke={subStroke}
+            strokeWidth="1.4"
+          />
+        </svg>
+      </motion.div>
+    );
+  }
+
+  // 6. Couture Mannequin & Ribbon Measuring Tape
+  if (motif === 'mannequin') {
+    return (
+      <motion.div
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36"
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Neck Finial */}
+          <motion.circle
+            cx="50"
+            cy="18"
+            r="3.5"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.4 }}
+            stroke={cobalt}
+            fill={cobalt}
+          />
+          <motion.line x1="50" y1="21.5" x2="50" y2="28" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} stroke={mainStroke} />
+          {/* Tailor Torso Form */}
+          <motion.path
+            d="M34 29 C36 40 40 44 38 60 L62 60 C60 44 64 40 66 29 Z"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.8, delay: 0.1, ease: 'easeOut' }}
+            stroke={mainStroke}
+          />
+          {/* Measuring Tape with Tick Marks winding around torso */}
+          <motion.path
+            d="M36 35 Q50 47 64 35 M40 49 Q50 56 60 49"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.7, delay: 0.35, ease: 'easeInOut' }}
+            stroke={cobalt}
+            strokeDasharray="2.5 2"
+          />
+          {/* Stand Base */}
+          <motion.line x1="50" y1="60" x2="50" y2="78" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} stroke={mainStroke} transition={{ delay: 0.3 }} />
+          <motion.line x1="38" y1="78" x2="62" y2="78" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} stroke={subStroke} transition={{ delay: 0.4 }} strokeWidth="2.5" />
+        </svg>
+      </motion.div>
+    );
+  }
+
+  // 7. Tailoring Shears & Silk Fabric
+  if (motif === 'scissors') {
+    return (
+      <motion.div
+        animate={{ y: [0, -3, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36"
+      >
+        <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          {/* Left Blade & Loop */}
+          <motion.path
+            d="M26 62 C18 62 18 52 26 52 C32 52 38 57 52 45 L86 28"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
+            stroke={mainStroke}
+          />
+          {/* Right Blade & Loop */}
+          <motion.path
+            d="M26 32 C18 32 18 42 26 42 C32 42 38 37 52 49 L86 66"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
+            stroke={mainStroke}
+          />
+          {/* Pivot Screw */}
+          <motion.circle cx="52" cy="47" r="3" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 }} fill={cobalt} stroke={cobalt} />
+          {/* Fabric Drape Guidelines */}
+          <motion.path
+            d="M62 47 Q78 42 94 47"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 0.75 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            stroke={cobalt}
+            strokeDasharray="2.5 2"
+          />
+        </svg>
+      </motion.div>
+    );
+  }
+
+  // 8. Geometric Monogram Emblem
   return (
-    <div className="relative flex items-center justify-center h-16 w-24">
-      <svg viewBox="0 0 100 60" className="h-full w-full stroke-white/85 fill-none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        {/* Hook */}
-        <motion.path
-          d="M50 18 C50 10 56 6 60 10 C64 14 58 22 50 24 L50 27"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.7, ease: 'easeOut' }}
-          className="stroke-[#3b82f6]"
+    <motion.div
+      animate={{ y: [0, -3, 0] }}
+      transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+      className="relative flex items-center justify-center h-24 w-24 xs:h-28 xs:w-28 sm:h-32 sm:w-32 md:h-36 md:w-36"
+    >
+      <svg viewBox="0 0 100 95" className="h-full w-full fill-none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        {/* Outer Diamond Shield */}
+        <motion.polygon
+          points="50,15 88,47 50,79 12,47"
+          initial={{ pathLength: 0, rotate: -10 }}
+          animate={{ pathLength: 1, rotate: 0 }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+          stroke={mainStroke}
+          strokeWidth="2.6"
         />
-        {/* Hanger Shoulder Slopes */}
-        <motion.path
-          d="M50 27 L18 47 C15 49 19 51 25 51 L75 51 C81 51 85 49 82 47 Z"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.8, delay: 0.15, ease: 'easeOut' }}
+        {/* Chiseled Monogram V inside Emblem */}
+        <ChiseledLuxuryV
+          isDark={isDark}
+          cobalt={cobalt}
+          mainStroke={mainStroke}
+          delay={0.25}
         />
-        {/* Draped Fabric Curve */}
+        {/* Orbital Compass Arc */}
         <motion.path
-          d="M30 51 Q50 56 70 51"
+          d="M8 47 A42 22 0 0 1 92 47"
           initial={{ pathLength: 0, opacity: 0 }}
           animate={{ pathLength: 1, opacity: 0.65 }}
-          transition={{ duration: 0.7, delay: 0.3, ease: 'easeInOut' }}
-          className="stroke-white"
+          transition={{ duration: 0.8, delay: 0.3 }}
+          stroke={cobalt}
+          strokeDasharray="3 3"
         />
       </svg>
-      {/* Center diamond seal */}
-      <div className="absolute top-[26px] left-1/2 -translate-x-1/2 h-1.5 w-1.5 rotate-45 bg-[#3b82f6] shadow-[0_0_10px_#3b82f6]" />
-    </div>
+    </motion.div>
   );
 }
 
@@ -411,6 +721,8 @@ export default function SplashLoader({
   loadingTextEn = 'INITIALIZING ARCHIVE',
   loadingTextAr = 'جاري تجهيز الكتالوج والقطع الحصرية',
   motif = 'hanger',
+  theme = 'dark',
+  onToggleTheme,
   isPreview = false,
   onClosePreview,
   onFinished,
@@ -419,6 +731,8 @@ export default function SplashLoader({
   const [shouldRender, setShouldRender] = useState(true);
   const [replayKey, setReplayKey] = useState(0);
   const [nameToggle, setNameToggle] = useState<'en' | 'ar'>('en');
+
+  const isDark = theme === 'dark';
 
   // Calm, luxury bilingual rhythm (switches every 2.8s)
   useEffect(() => {
@@ -435,7 +749,7 @@ export default function SplashLoader({
 
     let timer: NodeJS.Timeout;
     const startTime = Date.now();
-    const duration = isPreview ? 2200 : 1300; // Relaxed & smooth
+    const duration = isPreview ? 2200 : 1900; // Relaxed & smooth cinematic load for initial visit
 
     const updateProgress = () => {
       const elapsed = Date.now() - startTime;
@@ -454,94 +768,129 @@ export default function SplashLoader({
 
   // Real visitor auto-exit once progress reaches 100% and data is ready
   useEffect(() => {
-    if (!isPreview && !isLoading && progress >= 100) {
+    if (!isPreview && progress >= 100) {
+      const exitDelay = isLoading ? 350 : 200;
       const timeout = setTimeout(() => {
         setShouldRender(false);
-        onFinished?.();
-      }, 350);
+      }, exitDelay);
       return () => clearTimeout(timeout);
     }
-  }, [isPreview, isLoading, progress, onFinished]);
+  }, [isPreview, isLoading, progress]);
+
+  const handleExitComplete = () => {
+    onFinished?.();
+    if (isPreview) {
+      onClosePreview?.();
+    }
+  };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={handleExitComplete}>
       {shouldRender && (
         <motion.div
           key={`vant-splash-screen-${replayKey}`}
           initial={{ opacity: 1, y: 0 }}
           exit={{
             y: '-100%',
-            opacity: 0.95,
+            opacity: 0.98,
             transition: {
-              duration: 0.75,
-              ease: [0.16, 1, 0.3, 1],
+              duration: 0.52,
+              ease: [0.76, 0, 0.24, 1], // Couture velvet curtain lift (faster & silky)
             },
           }}
-          className="fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-[#08090c] text-white select-none overflow-hidden"
+          className={`fixed inset-0 h-[100dvh] min-h-[100dvh] w-full z-[9999] flex flex-col items-center justify-between select-none overflow-hidden transition-colors duration-500 font-sans border-b ${
+            isDark
+              ? 'bg-[#07090e] text-white border-white/10 shadow-[0_30px_70px_rgba(0,0,0,0.8)]'
+              : 'bg-gradient-to-b from-[#ffffff] via-[#f7f9fd] to-[#edf2f9] text-[#06080e] border-black/10 shadow-[0_20px_50px_rgba(0,74,215,0.15)]'
+          }`}
         >
-          {/* Pure Monochromatic Luxury Spotlight */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[550px] w-[550px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,74,215,0.15),transparent_70%)] blur-3xl pointer-events-none" />
+          {/* Ambient Luxury Spotlight (Responsive to Dark / Blue Mode vs White Mode) */}
+          <div
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[320px] w-[320px] sm:h-[560px] sm:w-[560px] rounded-full blur-3xl pointer-events-none transition-all duration-700 ${
+              isDark
+                ? 'bg-[radial-gradient(ellipse_at_center,rgba(0,74,215,0.24),transparent_70%)]'
+                : 'bg-[radial-gradient(ellipse_at_center,rgba(0,74,215,0.14)_0%,rgba(99,102,241,0.06)_42%,transparent_70%)]'
+            }`}
+          />
 
-          {/* Top Bar (Monochrome & Cobalt Blue Only) */}
-          <div className="w-full pt-8 sm:pt-10 px-6 sm:px-12 flex flex-wrap items-center justify-between gap-3 z-10 text-[10.5px] font-mono tracking-widest text-white/40 uppercase">
-            <span className="flex items-center gap-2">
+          {/* Top Bar with Brand Badge & Controls */}
+          <motion.div
+            exit={{ opacity: 0, y: -20, transition: { duration: 0.25, ease: 'easeIn' } }}
+            className="w-full pt-4 sm:pt-10 px-4 sm:px-12 flex flex-wrap items-center justify-between gap-2 sm:gap-3 z-10 text-[9.5px] sm:text-[10.5px] font-mono tracking-wider sm:tracking-widest uppercase"
+          >
+            <div className="flex items-center gap-2 sm:gap-2.5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#004ad7] animate-pulse" />
-              <span className="text-white/80 font-bold tracking-[0.25em]">VANT</span>
-              <span className="hidden sm:inline text-white/30">• ARCHIVE</span>
-            </span>
+              <span className={`font-bold tracking-[0.2em] sm:tracking-[0.25em] ${isDark ? 'text-white/80' : 'text-[#06080e]'}`}>
+                VANT
+              </span>
+            </div>
 
-            {isPreview ? (
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-white/10 text-white/90 border border-white/20 px-3 py-1 font-bold text-[10px] tracking-wider uppercase">
-                  {progress >= 100 ? 'PREVIEW READY' : 'PREVIEWING'}
+            <div className="flex items-center gap-2">
+              {isPreview ? (
+                <>
+                  <span
+                    className={`rounded-full px-2.5 sm:px-3 py-1 font-bold text-[9.5px] sm:text-[10px] tracking-wider uppercase border ${
+                      isDark
+                        ? 'bg-white/10 text-white/90 border-white/20'
+                        : 'bg-white/80 text-[#06080e] border-black/15 shadow-sm'
+                    }`}
+                  >
+                    {progress >= 100 ? 'PREVIEW READY' : 'PREVIEWING'}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setReplayKey((k) => k + 1)}
+                    className={`rounded-full px-2.5 sm:px-3 py-1 font-bold text-[9.5px] sm:text-[10.5px] cursor-pointer transition-all active:scale-95 border ${
+                      isDark
+                        ? 'bg-white/10 hover:bg-white/20 text-white border-white/15'
+                        : 'bg-white/90 hover:bg-white text-[#06080e] border-black/15 shadow-sm'
+                    }`}
+                  >
+                    إعادة التشغيل ↻
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShouldRender(false)}
+                    className={`rounded-full px-3 sm:px-3.5 py-1 font-extrabold text-[10px] sm:text-[11px] cursor-pointer transition-all active:scale-95 shadow-md ${
+                      isDark ? 'bg-white hover:bg-white/90 text-black' : 'bg-[#06080e] hover:bg-black text-white'
+                    }`}
+                  >
+                    ✕ إغلاق
+                  </button>
+                </>
+              ) : (
+                <span className={`tracking-[0.2em] sm:tracking-[0.3em] font-light text-[9.5px] sm:text-[10.5px] ${isDark ? 'text-white/40' : 'text-[#06080e]/60'}`}>
+                  COLLECTION 2026
                 </span>
+              )}
+            </div>
+          </motion.div>
 
-                <button
-                  type="button"
-                  onClick={() => setReplayKey((k) => k + 1)}
-                  className="rounded-full bg-white/10 hover:bg-white/20 text-white px-3 py-1 font-bold text-[10.5px] cursor-pointer transition-all active:scale-95 border border-white/15"
-                >
-                  إعادة التشغيل ↻
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShouldRender(false);
-                    onClosePreview?.();
-                  }}
-                  className="rounded-full bg-white hover:bg-white/90 text-black px-3.5 py-1 font-extrabold text-[11px] cursor-pointer transition-all active:scale-95 shadow-md"
-                >
-                  ✕ إغلاق
-                </button>
-              </div>
-            ) : (
-              <span className="text-white/40 tracking-[0.3em] font-light">COLLECTION 2026</span>
-            )}
-          </div>
-
-          {/* Centerpiece: Selected Fashion Icon + VANT Bilingual Kinetic Reveal */}
-          <div className="flex flex-col items-center justify-center text-center px-6 z-10 my-auto w-full max-w-xl space-y-6">
-            {/* Fashion Motif Graphic with smooth entrance */}
+          {/* Centerpiece: Precision Fashion Graphic + Bilingual Kinetic VANT */}
+          <motion.div
+            exit={{
+              scale: 1.04,
+              y: -25,
+              opacity: 0,
+              filter: 'blur(10px)',
+              transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+            }}
+            className="flex flex-col items-center justify-center text-center px-4 sm:px-6 z-10 my-auto w-full max-w-xl space-y-3.5 sm:space-y-6"
+          >
+            {/* Fashion Graphic Container with Balanced Proportions */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: -6 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
               className="relative flex flex-col items-center"
             >
-              <FashionMotifGraphic motif={motif} />
-
-              <div className="flex items-center gap-2.5 mt-1.5">
-                <span className="h-[1px] w-6 bg-gradient-to-r from-transparent to-white/30" />
-                <span className="text-[9.5px] font-mono tracking-[0.4em] text-white/50 uppercase font-medium">
-                  ATELIER & COUTURE
-                </span>
-                <span className="h-[1px] w-6 bg-gradient-to-l from-transparent to-white/30" />
-              </div>
+              <FashionMotifGraphic motif={motif} isDark={isDark} />
             </motion.div>
 
             {/* Calm, Silk-Smooth Bilingual Morphing Brand Name (VANT <-> ڤانت) */}
-            <div className="h-28 sm:h-36 flex items-center justify-center relative w-full overflow-hidden">
+            <div className="h-20 sm:h-36 flex items-center justify-center relative w-full overflow-hidden">
               <AnimatePresence mode="wait">
                 {nameToggle === 'en' ? (
                   <motion.div
@@ -552,10 +901,20 @@ export default function SplashLoader({
                     transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                     className="flex flex-col items-center"
                   >
-                    <h1 className="font-extrabold text-6xl sm:text-7xl md:text-8xl tracking-[0.28em] text-white drop-shadow-[0_0_45px_rgba(255,255,255,0.22)] pl-[0.28em] uppercase">
+                    <h1
+                      className={`font-black text-4xl xs:text-5xl sm:text-7xl md:text-8xl tracking-[0.22em] sm:tracking-[0.28em] pl-[0.22em] sm:pl-[0.28em] uppercase ${
+                        isDark
+                          ? 'text-white drop-shadow-[0_0_40px_rgba(59,130,246,0.35)]'
+                          : 'text-[#06080e] drop-shadow-[0_8px_32px_rgba(0,74,215,0.18)]'
+                      }`}
+                    >
                       VANT
                     </h1>
-                    <span className="block mt-2.5 text-[10.5px] sm:text-xs tracking-[0.45em] text-white/50 uppercase font-light pl-[0.45em]">
+                    <span
+                      className={`block mt-1.5 sm:mt-2.5 text-[9px] xs:text-[10px] sm:text-xs tracking-[0.3em] sm:tracking-[0.45em] uppercase font-semibold pl-[0.3em] sm:pl-[0.45em] ${
+                        isDark ? 'text-white/50' : 'text-[#06080e]/75'
+                      }`}
+                    >
                       EDITORIAL STREETWEAR
                     </span>
                   </motion.div>
@@ -569,10 +928,20 @@ export default function SplashLoader({
                     className="flex flex-col items-center"
                     dir="rtl"
                   >
-                    <h1 className="font-black text-6xl sm:text-7xl md:text-8xl tracking-wider text-white drop-shadow-[0_0_45px_rgba(255,255,255,0.22)]">
+                    <h1
+                      className={`font-black text-4xl xs:text-5xl sm:text-7xl md:text-8xl tracking-wide sm:tracking-wider ${
+                        isDark
+                          ? 'text-white drop-shadow-[0_0_40px_rgba(59,130,246,0.35)]'
+                          : 'text-[#06080e] drop-shadow-[0_8px_32px_rgba(0,74,215,0.18)]'
+                      }`}
+                    >
                       ڤــانـت
                     </h1>
-                    <span className="block mt-2.5 text-xs sm:text-sm tracking-widest text-white/60 font-medium">
+                    <span
+                      className={`block mt-1.5 sm:mt-2.5 text-[11px] sm:text-sm tracking-wide sm:tracking-widest font-semibold ${
+                        isDark ? 'text-white/60' : 'text-[#06080e]/80'
+                      }`}
+                    >
                       أزياء راقية وتصاميم حصرية
                     </span>
                   </motion.div>
@@ -580,44 +949,78 @@ export default function SplashLoader({
               </AnimatePresence>
             </div>
 
-            {/* Dynamic Status / Loading Message (Clean High-Contrast Pill) */}
+            {/* Dynamic Status / Loading Message (High-Contrast Glass Pill) */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25, duration: 0.5 }}
-              className="rounded-2xl border border-white/15 bg-white/[0.03] backdrop-blur-xl px-6 py-3.5 max-w-md w-full space-y-1.5 shadow-2xl"
+              className={`rounded-xl sm:rounded-2xl border px-4 py-2.5 sm:px-6 sm:py-3.5 max-w-xs sm:max-w-md w-full space-y-1 sm:space-y-1.5 backdrop-blur-2xl transition-all ${
+                isDark
+                  ? 'border-white/10 bg-white/[0.03] shadow-2xl text-white'
+                  : 'border-black/[0.08] bg-white/80 shadow-[0_12px_40px_rgba(0,74,215,0.10),0_2px_8px_rgba(0,0,0,0.04)] text-[#06080e]'
+              }`}
             >
               <div className="flex items-center justify-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#004ad7] animate-ping" />
-                <p className="text-xs font-mono tracking-widest text-white/90 uppercase font-bold">
-                  {loadingTextEn}
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    progress >= 100
+                      ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
+                      : 'bg-[#004ad7] animate-ping'
+                  }`}
+                />
+                <p
+                  className={`text-[10.5px] sm:text-xs font-mono tracking-wider sm:tracking-widest uppercase font-bold ${
+                    isDark ? 'text-white/90' : 'text-[#06080e]'
+                  }`}
+                >
+                  {progress >= 100 ? 'READY FOR ARCHIVE' : loadingTextEn}
                 </p>
               </div>
-              <p dir="rtl" className="text-xs sm:text-[13px] font-medium text-white/60">
-                {loadingTextAr}
+              <p
+                dir="rtl"
+                className={`text-[11px] sm:text-[13px] font-semibold ${
+                  isDark ? 'text-white/60' : 'text-[#06080e]/80'
+                }`}
+              >
+                {progress >= 100 ? 'اكتمل التجهيز · جاري عرض التشكيلة' : loadingTextAr}
               </p>
             </motion.div>
-          </div>
+          </motion.div>
 
           {/* Bottom Hairline Progress Bar & Metrics */}
-          <div className="w-full pb-8 sm:pb-10 px-6 sm:px-12 z-10 space-y-2.5 max-w-2xl mx-auto">
-            <div className="flex items-center justify-between text-[10.5px] font-mono tracking-wider text-white/50">
+          <motion.div
+            exit={{ opacity: 0, y: 20, transition: { duration: 0.25, ease: 'easeIn' } }}
+            className="w-full pb-5 sm:pb-10 px-5 sm:px-12 z-10 space-y-2 sm:space-y-2.5 max-w-2xl mx-auto"
+          >
+            <div
+              className={`flex items-center justify-between text-[9.5px] sm:text-[10.5px] font-mono tracking-wider ${
+                isDark ? 'text-white/50' : 'text-[#06080e]/75'
+              }`}
+            >
               <span className="flex items-center gap-2">
-                <span className="animate-spin inline-block h-2 w-2 rounded-full border border-white/30 border-t-[#3b82f6]" />
-                <span className="tracking-widest uppercase">{progress >= 100 ? 'READY' : 'LOADING'}</span>
+                <span className="animate-spin inline-block h-2 w-2 rounded-full border border-current border-t-[#004ad7]" />
+                <span className="tracking-widest uppercase font-semibold">{progress >= 100 ? 'READY' : 'LOADING'}</span>
               </span>
-              <span className="tabular-nums text-white font-extrabold text-xs">{progress}%</span>
+              <span className={`tabular-nums font-black text-xs ${isDark ? 'text-white' : 'text-[#004ad7]'}`}>{progress}%</span>
             </div>
 
             {/* Minimalist 2px Monochrome & Blue Hairline Track */}
-            <div className="relative h-[2px] w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className={`relative h-[2px] w-full overflow-hidden rounded-full ${
+                isDark ? 'bg-white/10' : 'bg-black/[0.08]'
+              }`}
+            >
               <motion.div
-                className="h-full bg-gradient-to-r from-[#004ad7] via-[#3b82f6] to-white"
+                className={`h-full bg-gradient-to-r ${
+                  isDark
+                    ? 'from-[#004ad7] via-[#3b82f6] to-white'
+                    : 'from-[#004ad7] via-[#2563eb] to-[#06080e]'
+                }`}
                 style={{ width: `${progress}%` }}
                 transition={{ ease: 'linear' }}
               />
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

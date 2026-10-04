@@ -275,15 +275,15 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
   const whatsappMessage = lang === 'ar'
     ? isSoldOut
       ? selectedSize
-        ? `مرحباً دار ڤانت، أود الاستفسار عن إمكانية إعادة توفير مقاس (${selectedSize}) لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
-        : `مرحباً دار ڤانت، أود الاستفسار عن إمكانية إعادة توفير قطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+        ? `مرحباً ڤانت، أود الاستفسار عن إمكانية إعادة توفير مقاس (${selectedSize}) لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+        : `مرحباً ڤانت، أود الاستفسار عن إمكانية إعادة توفير قطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
       : availability === 'coming_soon'
       ? selectedSize
-        ? `مرحباً دار ڤانت، أود حجز أسبقية لمقاس (${selectedSize}) من قطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
-        : `مرحباً دار ڤانت، أود الاستفسار وحجز أسبقية لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+        ? `مرحباً ڤانت، أود حجز أسبقية لمقاس (${selectedSize}) من قطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+        : `مرحباً ڤانت، أود الاستفسار وحجز أسبقية لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
       : selectedSize
-      ? `مرحباً دار ڤانت، أود طلب قطعة "${displayTitle ?? ''}" بمقاس (${selectedSize}) (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
-      : `مرحباً دار ڤانت، أود الاستفسار والطلب لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+      ? `مرحباً ڤانت، أود طلب قطعة "${displayTitle ?? ''}" بمقاس (${selectedSize}) (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
+      : `مرحباً ڤانت، أود الاستفسار والطلب لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - السعر: ${formattedProductPrice})`
     : isSoldOut
     ? selectedSize
       ? `Hello Maison VANT, I would like to inquire about restocking size (${selectedSize}) for "${displayTitle ?? ''}" (Code: ${productCode} - Price: ${formattedProductPrice})`
@@ -302,7 +302,7 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
 
   const bespokeWhatsappText = encodeURIComponent(
     lang === 'ar'
-      ? `مرحباً دار ڤانت، أود الاستفسار عن خدمة التفصيل الخاص (Made-to-Measure) لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - الطول: ${calcHeight} سم، الوزن: ${calcWeight} كغم، السعر: ${formattedProductPrice})`
+      ? `مرحباً ڤانت، أود الاستفسار عن خدمة التفصيل الخاص (Made-to-Measure) لقطعة "${displayTitle ?? ''}" (كود القطعة: ${productCode} - الطول: ${calcHeight} سم، الوزن: ${calcWeight} كغم، السعر: ${formattedProductPrice})`
       : `Hello Maison VANT, I would like to inquire about Made-to-Measure bespoke tailoring for "${displayTitle ?? ''}" (Code: ${productCode} - Height: ${calcHeight} cm, Weight: ${calcWeight} kg, Price: ${formattedProductPrice})`
   );
   const targetBespokePhone = (bespokePhoneControl?.actionValue || '').replace(/[^0-9]/g, '') || targetPhone;

@@ -40,7 +40,7 @@ export default function MaintenanceScreen({
   };
 
   const whatsappUrl = `https://wa.me/${DEFAULT_WHATSAPP_PHONE}?text=${encodeURIComponent(
-    'مرحباً دار ڤانت، أود الاستفسار أثناء فترة تحديث المتجر.'
+    'مرحباً ڤانت، أود الاستفسار أثناء فترة تحديث المتجر.'
   )}`;
 
   return (

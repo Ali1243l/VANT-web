@@ -57,21 +57,11 @@ function MainApp() {
 
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
-  // Once-only splash screen lock for session to prevent double-render flashes
-  const [hasFinishedSplash, setHasFinishedSplash] = useState<boolean>(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        return sessionStorage.getItem('vant_splash_shown_v1') === 'true';
-      }
-    } catch {}
-    return false;
-  });
+  // Always display preloader on site launch to give the store time to load smoothly
+  const [hasFinishedSplash, setHasFinishedSplash] = useState<boolean>(false);
 
   const handleSplashFinished = useCallback(() => {
     setHasFinishedSplash(true);
-    try {
-      sessionStorage.setItem('vant_splash_shown_v1', 'true');
-    } catch {}
   }, []);
 
   const [lang, setLang] = useState<Language>('ar');
@@ -169,6 +159,20 @@ function MainApp() {
     localStorage.setItem('vant-theme', theme);
   }, [theme]);
 
+  // Listen for device OS theme change (System Dark Mode / Light Mode auto sync)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+      const saved = localStorage.getItem('vant-theme');
+      if (!saved) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    };
+    mediaQuery.addEventListener('change', handleSystemThemeChange);
+    return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
+  }, []);
+
   // Seamless First Paint: Trigger smooth opacity fade-in once React app is mounted and state is ready
   useEffect(() => {
     const rootEl = document.getElementById('root');
@@ -263,10 +267,12 @@ function MainApp() {
       {/* Root Cinematic Splash / Preloader Screen (Shows once on launch or when tested via Admin) */}
       {showSplash && (
         <SplashLoader
-          isLoading={isInitialSplashLoading}
+          isLoading={isInitialSplashLoading || loading}
           loadingTextEn={siteSettings.loading_text_en}
           loadingTextAr={siteSettings.loading_text_ar}
           motif={siteSettings.splash_motif}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           isPreview={isPreviewSplash}
           onClosePreview={() => setIsPreviewSplash(false)}
           onFinished={handleSplashFinished}

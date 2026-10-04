@@ -137,13 +137,13 @@ export const DEFAULT_SITE_CONTROLS: Record<string, SiteControlItem> = {
   brand_kinetic_logo: {
     id: 'brand_kinetic_logo',
     category: 'header',
-    name_ar: 'شعار الدار الحركي في المنتصف',
+    name_ar: 'شعار ڤانت الحركي في المنتصف',
     name_en: 'Kinetic Center Brand Wordmark',
     visible: true,
     enabled: true,
     label_ar: 'ڤانت',
     label_en: 'VANT',
-    description_ar: 'شعار الدار المتمركز في الترويسة مع الحركة الانسيابية التلقائية',
+    description_ar: 'شعار ڤانت المتمركز في الترويسة مع الحركة الانسيابية التلقائية',
     description_en: 'Kinetic typography logo in header center with smooth cycling animation',
   },
 
@@ -312,7 +312,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   loading_text_ar: 'جاري تحميل الأرشيف وتجهيز التشكيلة',
   maintenance_message: 'We are preparing Volume 02. Please check back later.',
   maintenance_message_ar: 'نعمل حالياً على تجهيز التشكيلة الجديدة وتحديث النظام. يرجى العودة لاحقاً.',
-  splash_motif: 'hanger',
+  splash_motif: 'tshirt_print',
 };
 
 export interface ProductEnhancement {
@@ -1018,7 +1018,7 @@ export function SiteControlsProvider({ children }: { children: ReactNode }) {
           loading_text_ar: data.loading_text_ar || DEFAULT_SITE_SETTINGS.loading_text_ar,
           maintenance_message: data.maintenance_message || DEFAULT_SITE_SETTINGS.maintenance_message,
           maintenance_message_ar: data.maintenance_message_ar || DEFAULT_SITE_SETTINGS.maintenance_message_ar,
-          splash_motif: data.splash_motif || DEFAULT_SITE_SETTINGS.splash_motif || 'hanger',
+          splash_motif: data.splash_motif || DEFAULT_SITE_SETTINGS.splash_motif || 'tshirt_print',
         };
         setSiteSettings(merged);
         try {

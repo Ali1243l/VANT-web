@@ -164,7 +164,7 @@ export function calculateRecommendedSize(
       reason_ar: 'يتطلب تفصيلاً خاصاً (Bespoke)',
       reason_en: 'Requires Bespoke Tailoring',
       note_ar: weightKg > 118
-        ? 'المقاسات الجاهزة المتوفرة (من XS إلى XXL) مخصصة حتى وزن 118 كغم، ولن توفر الراحة أو الاتساع المطلوب لهذا القياس. دار ڤانت ترحب بطلب تفصيل قطعة خاصة لك بمقاساتك الدقيقة عبر خدمة التفصيل الخاص.'
+        ? 'المقاسات الجاهزة المتوفرة (من XS إلى XXL) مخصصة حتى وزن 118 كغم، ولن توفر الراحة أو الاتساع المطلوب لهذا القياس. ڤانت ترحب بطلب تفصيل قطعة خاصة لك بمقاساتك الدقيقة عبر خدمة التفصيل الخاص.'
         : 'نظراً لاختلاف تناسق الطول والوزن عن قوالب المقاسات الجاهزة، المقاسات الجاهزة ستكون غير متناسقة في طول الأكمام والكتفين. نوصي بالتفصيل الخاص لضمان قصة مثالية ومريحة.',
       note_en: weightKg > 118
         ? 'Current ready-to-wear sizes (XS–XXL) are tailored up to 118 kg and cannot accommodate this profile comfortably. Maison VANT welcomes bespoke Made-to-Measure orders tailored to your exact measurements.'

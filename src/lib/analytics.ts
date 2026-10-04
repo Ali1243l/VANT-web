@@ -936,7 +936,7 @@ export function generateAnalyticsHTMLReport(productsList: any[] = []): string {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>تقرير التحليلات التنفيذي الشامل - دار ڤانت للأزياء</title>
+  <title>تقرير التحليلات التنفيذي الشامل - ڤانت للأزياء</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
     body { font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, sans-serif; background: #0c0e15; color: #fff; padding: 40px 20px; margin: 0; }

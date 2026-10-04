@@ -26,8 +26,8 @@ export default function ShareModal({ isOpen, onClose, product, lang }: ShareModa
     : `https://vant-fashion.com?item=${product.id}`;
 
   const shareText = isAr
-    ? `دار ڤانت — ${displayTitle} (${priceFormatted})\n${shareUrl}`
-    : `Maison VANT — ${displayTitle} (${priceFormatted})\n${shareUrl}`;
+    ? `ڤانت — ${displayTitle} (${priceFormatted})\n${shareUrl}`
+    : `VANT — ${displayTitle} (${priceFormatted})\n${shareUrl}`;
 
   const handleCopyLink = async () => {
     try {

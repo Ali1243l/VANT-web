@@ -50,6 +50,7 @@ import {
   FileCode,
   FileText,
   Printer,
+  Mail,
 } from 'lucide-react';
 import { useSiteControls, type SiteControlItem } from '../context/SiteControlsContext';
 import { ALL_SIZES, type Product, type Language, type ProductAvailability, type TrendItem } from '../types';
@@ -69,6 +70,8 @@ import { uploadImageToSupabase } from '../lib/storage';
 import ImageUploader from './ImageUploader';
 import AdminAnalyticsDashboard from './AdminAnalyticsDashboard';
 import SocialLinksManager from './SocialLinksManager';
+import AdminNewsletterManager from './AdminNewsletterManager';
+import { getStoredSubscribers } from '../lib/newsletter';
 import { AVAILABLE_SPLASH_MOTIFS } from './SplashLoader';
 import type { SplashMotifType } from '../context/SiteControlsContext';
 
@@ -76,7 +79,7 @@ interface Props {
   lang?: Language;
 }
 
-type TabType = 'analytics' | 'products' | 'banners' | 'social' | 'controls' | 'backup' | 'security';
+type TabType = 'analytics' | 'products' | 'banners' | 'social' | 'controls' | 'newsletter' | 'backup' | 'security';
 
 export default function AdminDrawer({ lang = 'ar' }: Props) {
   const isAr = lang === 'ar';
@@ -561,7 +564,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-sm sm:text-base font-bold tracking-tight text-white">
-                    {isAr ? 'مركز عمليات دار ڤانت المتكامل' : 'Maison VANT Operations Command Center'}
+                    {isAr ? 'مركز عمليات ڤانت المتكامل' : 'VANT Operations Command Center'}
                   </h1>
                   <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -697,7 +700,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
               </div>
 
               <h2 className="text-lg font-bold text-white tracking-tight">
-                {isAr ? 'بوابة دار ڤانت · وصول محمي' : 'Maison VANT · Secure Portal'}
+                {isAr ? 'بوابة ڤانت · وصول محمي' : 'VANT · Secure Portal'}
               </h2>
               <p className="mt-2 text-xs text-white/50 leading-relaxed">
                 {isAr
@@ -840,6 +843,24 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                 >
                   <Sliders className="h-4 w-4 text-purple-400" />
                   <span>{isAr ? 'أزرار الموقع والتواصل' : 'Buttons & Interactive Controls'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('newsletter')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'newsletter'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Mail className="h-4 w-4 text-[#3b82f6]" />
+                  <span>{isAr ? 'النشرة البريدية والعروض' : 'Newsletter & VIP Campaigns'}</span>
+                  {getStoredSubscribers().length > 0 && (
+                    <span className="ltr:ml-auto rtl:mr-auto rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-300 font-bold font-mono">
+                      {getStoredSubscribers().length}
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -2058,7 +2079,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                         const activePhone = whatsappNumbers.find((n) => n.isActive) || whatsappNumbers[0];
                         const activeNum = activePhone ? activePhone.number : primaryPhoneInput;
                         const activeClean = activeNum.replace(/[^0-9]/g, '');
-                        const testUrl = activeClean ? `https://wa.me/${activeClean}?text=${encodeURIComponent('تجربة اتصال من لوحة تحكم دار ڤانت')}` : '#';
+                        const testUrl = activeClean ? `https://wa.me/${activeClean}?text=${encodeURIComponent('تجربة اتصال من لوحة تحكم ڤانت')}` : '#';
 
                         return (
                           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2076,7 +2097,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                                   </span>
                                 </div>
                                 <span className="text-[11px] text-white/50 block mt-0.5">
-                                  {activePhone?.label || (isAr ? 'رقم الواتساب الرئيسي لدار ڤانت' : 'Primary Maison VANT WhatsApp')}
+                                  {activePhone?.label || (isAr ? 'رقم الواتساب الرئيسي لـ ڤانت' : 'Primary VANT WhatsApp')}
                                 </span>
                               </div>
                             </div>
@@ -2520,6 +2541,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                           {AVAILABLE_SPLASH_MOTIFS.map((item) => {
                             const isSelected = (siteSettings.splash_motif || 'hanger') === item.id;
+                            const isPrintOrApparel = item.id === 'print_press' || item.id === 'tshirt_print' || item.id === 'embroidery';
                             return (
                               <button
                                 key={item.id}
@@ -2534,14 +2556,20 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                                 }`}
                               >
                                 <div className="flex items-center justify-between w-full mb-1.5">
-                                  <span className={`text-xs font-bold ${isSelected ? 'text-[#60a5fa]' : 'text-white'}`}>
-                                    {isAr ? item.titleAr : item.titleEn}
-                                  </span>
-                                  {isSelected && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-xs font-bold ${isSelected ? 'text-[#60a5fa]' : 'text-white'}`}>
+                                      {isAr ? item.titleAr : item.titleEn}
+                                    </span>
+                                  </div>
+                                  {isSelected ? (
                                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#004ad7] text-white text-[10px]">
                                       ✓
                                     </span>
-                                  )}
+                                  ) : isPrintOrApparel ? (
+                                    <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                      {isAr ? 'طباعة' : 'PRINT'}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <p className="text-[11px] text-white/55 leading-relaxed">
                                   {isAr ? item.subtitleAr : item.subtitleEn}
@@ -2812,6 +2840,13 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* TAB: NEWSLETTER SUBSCRIBERS & VIP CAMPAIGNS */}
+              {activeTab === 'newsletter' && (
+                <div className="space-y-6 max-w-5xl mx-auto">
+                  <AdminNewsletterManager lang={isAr ? 'ar' : 'en'} embedded={true} />
                 </div>
               )}
 
