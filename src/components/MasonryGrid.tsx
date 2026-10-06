@@ -1,4 +1,3 @@
-import { AnimatePresence } from 'framer-motion';
 import type { Product, Language } from '../types';
 import ProductCard from './ProductCard';
 import SkeletonCard from './SkeletonCard';
@@ -6,6 +5,7 @@ import SkeletonCard from './SkeletonCard';
 interface Props {
   products: Product[];
   loading?: boolean;
+  loadingMore?: boolean;
   lang: Language;
   onOpen: (p: Product) => void;
   isWishlisted?: (id: string | number) => boolean;
@@ -30,13 +30,14 @@ const SKELETON_ASPECTS = [
 export default function MasonryGrid({
   products,
   loading,
+  loadingMore,
   lang,
   onOpen,
   isWishlisted,
   onToggleWishlist,
 }: Props) {
   const columns =
-    'columns-2 gap-3 px-3 pb-16 pt-2 sm:columns-3 sm:gap-4 lg:columns-4 lg:px-6 max-w-7xl mx-auto';
+    'columns-2 gap-3 pb-16 pt-2 sm:columns-2 sm:gap-4 md:columns-3 md:gap-5 lg:columns-3 xl:columns-4 xl:gap-6 2xl:columns-4 2xl:gap-7 w-full max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1536px] mx-auto';
 
   if (loading) {
     return (
@@ -63,24 +64,23 @@ export default function MasonryGrid({
     );
   }
 
-  // Key whenever product IDs change to smoothly popLayout
-  const gridKey = products.map((p) => p.id).join(',');
-
   return (
-    <div className={columns} key={gridKey}>
-      <AnimatePresence mode="popLayout">
-        {products.map((p, i) => (
-          <ProductCard
-            key={p.id}
-            product={p}
-            index={i}
-            lang={lang}
-            isWishlisted={isWishlisted ? isWishlisted(p.id) : false}
-            onToggleWishlist={onToggleWishlist}
-            onOpen={onOpen}
-          />
+    <div className={columns}>
+      {products.map((p, i) => (
+        <ProductCard
+          key={p.id}
+          product={p}
+          index={i}
+          lang={lang}
+          isWishlisted={isWishlisted ? isWishlisted(p.id) : false}
+          onToggleWishlist={onToggleWishlist}
+          onOpen={onOpen}
+        />
+      ))}
+      {loadingMore &&
+        ['aspect-[3/4]', 'aspect-[4/5]', 'aspect-[3/4]', 'aspect-[1/1]'].map((aspect, idx) => (
+          <SkeletonCard key={`more-skeleton-${idx}`} aspectRatioClass={aspect} index={products.length + idx} />
         ))}
-      </AnimatePresence>
     </div>
   );
 }

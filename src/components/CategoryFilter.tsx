@@ -15,6 +15,9 @@ interface Props {
   availability?: AvailabilityFilterType;
   onAvailabilityChange?: (a: AvailabilityFilterType) => void;
   availabilityCounts?: Record<AvailabilityFilterType, number>;
+  isOffersOnly?: boolean;
+  onToggleOffersOnly?: (val: boolean) => void;
+  offersCount?: number;
 }
 
 export default function CategoryFilter({
@@ -26,6 +29,9 @@ export default function CategoryFilter({
   availability = 'all',
   onAvailabilityChange,
   availabilityCounts,
+  isOffersOnly = false,
+  onToggleOffersOnly,
+  offersCount = 0,
 }: Props) {
   const { getControl } = useSiteControls();
   const filterControl = getControl('btn_filter_availability');
@@ -33,14 +39,33 @@ export default function CategoryFilter({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isAr = lang === 'ar';
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
 
+  // Smooth scroll window back up to the top of the collection when switching category/filters
+  const scrollToCatalogTop = () => {
+    if (typeof window !== 'undefined' && window.scrollY > 20) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  // Container-isolated scroll: smoothly centers active category inside tabs bar
   useEffect(() => {
-    activeRef.current?.scrollIntoView({
+    if (!activeRef.current || !tabsContainerRef.current) return;
+    const container = tabsContainerRef.current;
+    const activeEl = activeRef.current;
+
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+    const offset = (activeRect.left + activeRect.width / 2) - (containerRect.left + containerRect.width / 2);
+
+    container.scrollBy({
+      left: offset,
       behavior: 'smooth',
-      inline: 'center',
-      block: 'nearest',
     });
-  }, [active]);
+  }, [active, isOffersOnly]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -101,17 +126,39 @@ export default function CategoryFilter({
   const currentOption = availabilityOptions.find((o) => o.id === availability) || availabilityOptions[0];
 
   return (
-    <nav aria-label="Categories & Filters" className="pb-2.5 pt-0.5 sm:pb-3 sm:pt-1">
+    <nav aria-label="Categories & Filters" className="pb-1.5 pt-0 sm:pb-2 sm:pt-0.5 md:pb-2 md:pt-0.5 w-full max-w-full overflow-x-clip">
       {/* Centered, balanced luxury bar with seamless inline filter */}
-      <div className="mx-auto flex max-w-7xl items-center justify-center px-3 sm:px-6">
-        <div className="flex items-center gap-2 max-w-full">
+      <div className="mx-auto flex max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1536px] w-full items-center justify-center px-3 sm:px-6 md:px-8">
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 max-w-full">
           {/* 1. Category Tabs Track (Smooth Scroll, Perfectly Centered on Desktop) */}
           <div
+            ref={tabsContainerRef}
             role="tablist"
-            className="no-scrollbar flex items-center gap-1.5 sm:gap-2 overflow-x-auto [scroll-snap-type:x_proximity] select-none py-1"
+            className="no-scrollbar flex items-center gap-1.5 sm:gap-2 md:gap-2.5 overflow-x-auto [scroll-snap-type:x_proximity] select-none py-1 md:py-1.5"
           >
+            {/* Special Offers & Discounts Button */}
+            {onToggleOffersOnly && (
+              <button
+                type="button"
+                ref={isOffersOnly ? activeRef : undefined}
+                role="tab"
+                aria-selected={isOffersOnly}
+                onClick={() => {
+                  onToggleOffersOnly(!isOffersOnly);
+                  scrollToCatalogTop();
+                }}
+                className={`shrink-0 snap-center whitespace-nowrap rounded-full px-3 py-1.5 md:h-9.5 md:px-4 lg:h-10 lg:px-4.5 flex items-center justify-center text-xs sm:text-[12.5px] md:text-[13px] font-medium md:font-semibold transition-all duration-200 active:scale-95 cursor-pointer ${
+                  isOffersOnly
+                    ? 'bg-[#15171c] dark:bg-white text-white dark:text-[#15171c] font-semibold shadow-xs ring-1 ring-black/10 dark:ring-white/20'
+                    : 'bg-black/[0.035] dark:bg-white/[0.06] text-[#6b7280] dark:text-[#9ca3af] hover:text-[#15171c] dark:hover:text-[#f3f4f6] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] border border-black/5 dark:border-white/5'
+                }`}
+              >
+                {isAr ? 'العروضات والخصومات' : 'Offers & Discounts'}
+              </button>
+            )}
+
             {categories.map((c) => {
-              const isActive = c === active;
+              const isActive = c === active && !isOffersOnly;
               const displayLabel = getLabel ? getLabel(c) : c;
 
               return (
@@ -120,8 +167,18 @@ export default function CategoryFilter({
                   ref={isActive ? activeRef : undefined}
                   role="tab"
                   aria-selected={isActive}
-                  onClick={() => onChange(c)}
-                  className={`shrink-0 snap-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs sm:text-[13px] font-medium transition-all duration-200 active:scale-95 cursor-pointer ${
+                  onClick={() => {
+                    if (onToggleOffersOnly) onToggleOffersOnly(false);
+                    const allCat = categories[0] || 'all';
+                    // If user clicks the currently active category (like clicking 'shoes' while in 'shoes'), return to 'all'
+                    if (isActive && c !== allCat && c !== 'all') {
+                      onChange(allCat);
+                    } else {
+                      onChange(c);
+                    }
+                    scrollToCatalogTop();
+                  }}
+                  className={`shrink-0 snap-center whitespace-nowrap rounded-full px-3 py-1.5 md:h-9.5 md:px-4 lg:h-10 lg:px-4.5 flex items-center justify-center text-xs sm:text-[12.5px] md:text-[13px] font-medium md:font-semibold transition-all duration-200 active:scale-95 cursor-pointer ${
                     isActive
                       ? 'bg-[#15171c] dark:bg-white text-white dark:text-[#15171c] font-semibold shadow-xs ring-1 ring-black/10 dark:ring-white/20'
                       : 'bg-black/[0.035] dark:bg-white/[0.06] text-[#6b7280] dark:text-[#9ca3af] hover:text-[#15171c] dark:hover:text-[#f3f4f6] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] border border-black/5 dark:border-white/5'
@@ -135,7 +192,7 @@ export default function CategoryFilter({
 
           {/* 2. Soft Elegant Divider */}
           {filterControl.visible && onAvailabilityChange && (
-            <span className="h-4.5 w-px bg-black/12 dark:bg-white/15 shrink-0 mx-0.5" aria-hidden="true" />
+            <span className="h-4 md:h-5 w-px bg-black/10 dark:bg-white/12 shrink-0 mx-0.5 md:mx-1" aria-hidden="true" />
           )}
 
           {/* 3. Availability Filter Pill (Controlled via SiteControls) */}
@@ -146,7 +203,7 @@ export default function CategoryFilter({
                 onClick={() => setIsOpen(!isOpen)}
                 aria-expanded={isOpen}
                 aria-haspopup="true"
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-[13px] font-medium transition-all duration-200 active:scale-95 cursor-pointer border ${
+                className={`flex shrink-0 items-center gap-1.5 md:gap-2 rounded-full px-3 py-1.5 md:h-9.5 md:px-4 lg:h-10 lg:px-4.5 text-xs sm:text-[12.5px] md:text-[13px] font-medium md:font-semibold transition-all duration-200 active:scale-95 cursor-pointer border ${
                   availability !== 'all'
                     ? 'border-[#004ad7]/30 dark:border-[#3b82f6]/30 bg-[#004ad7]/10 dark:bg-[#3b82f6]/15 text-[#004ad7] dark:text-[#3b82f6] font-semibold'
                     : isOpen
@@ -177,7 +234,7 @@ export default function CategoryFilter({
                     exit={{ opacity: 0, scale: 0.95, y: 4 }}
                     transition={{ type: 'spring', stiffness: 480, damping: 30 }}
                     role="menu"
-                    className="absolute z-50 mt-2.5 min-w-[245px] sm:min-w-[260px] rounded-2xl border border-black/8 dark:border-white/12 bg-white/95 dark:bg-[#12141a]/95 p-2 shadow-[0_20px_50px_rgba(0,0,0,0.14),0_6px_18px_rgba(0,0,0,0.06)] dark:shadow-[0_24px_55px_rgba(0,0,0,0.85),0_6px_20px_rgba(0,0,0,0.5)] backdrop-blur-2xl text-[#15171c] dark:text-white ltr:right-0 ltr:left-auto rtl:left-0 rtl:right-auto max-w-[calc(100vw-32px)]"
+                    className="absolute z-50 mt-2 min-w-[230px] sm:min-w-[245px] md:min-w-[260px] rounded-2xl border border-black/8 dark:border-white/12 bg-white/95 dark:bg-[#12141a]/95 p-1.5 md:p-2 shadow-[0_20px_50px_rgba(0,0,0,0.14),0_6px_18px_rgba(0,0,0,0.06)] dark:shadow-[0_24px_55px_rgba(0,0,0,0.85),0_6px_20px_rgba(0,0,0,0.5)] backdrop-blur-2xl text-[#15171c] dark:text-white ltr:right-0 ltr:left-auto rtl:left-0 rtl:right-auto max-w-[calc(100vw-32px)]"
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-black/6 dark:border-white/8 mb-1.5">
@@ -213,17 +270,18 @@ export default function CategoryFilter({
                             onClick={() => {
                               onAvailabilityChange(opt.id);
                               setIsOpen(false);
+                              scrollToCatalogTop();
                             }}
-                            className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs sm:text-[13px] transition-all duration-150 cursor-pointer ${
+                            className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 md:px-3 md:py-2.5 text-xs sm:text-[13px] md:text-sm transition-all duration-150 cursor-pointer ${
                               isSelected
                                 ? 'bg-[#004ad7]/10 dark:bg-[#3b82f6]/15 text-[#004ad7] dark:text-[#60a5fa] font-semibold ring-1 ring-[#004ad7]/20 dark:ring-[#3b82f6]/30 shadow-2xs'
                                 : 'hover:bg-black/4 dark:hover:bg-white/6 text-neutral-700 dark:text-neutral-200 hover:text-black dark:hover:text-white'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-2.5 md:gap-3">
                               {/* Dedicated Icon Badge */}
                               <div
-                                className={`flex h-7 w-7 items-center justify-center rounded-xl shrink-0 transition-colors ${
+                                className={`flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-xl shrink-0 transition-colors ${
                                   opt.id === 'all'
                                     ? 'bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-200'
                                     : opt.id === 'in_stock'

@@ -777,6 +777,25 @@ export default function SplashLoader({
     }
   }, [isPreview, isLoading, progress]);
 
+  // Strict page scroll locking while Splash Loader is displayed
+  useEffect(() => {
+    if (shouldRender) {
+      const prevBodyOverflow = document.body.style.overflow;
+      const prevBodyTouchAction = document.body.style.touchAction;
+      const prevHtmlOverflow = document.documentElement.style.overflow;
+
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      document.documentElement.style.overflow = 'hidden';
+
+      return () => {
+        document.body.style.overflow = prevBodyOverflow;
+        document.body.style.touchAction = prevBodyTouchAction;
+        document.documentElement.style.overflow = prevHtmlOverflow;
+      };
+    }
+  }, [shouldRender]);
+
   const handleExitComplete = () => {
     onFinished?.();
     if (isPreview) {
@@ -798,7 +817,7 @@ export default function SplashLoader({
               ease: [0.76, 0, 0.24, 1], // Couture velvet curtain lift (faster & silky)
             },
           }}
-          className={`fixed inset-0 h-[100dvh] min-h-[100dvh] w-full z-[9999] flex flex-col items-center justify-between select-none overflow-hidden transition-colors duration-500 font-sans border-b ${
+          className={`fixed inset-0 h-[100dvh] min-h-[100dvh] w-full z-[9999] flex flex-col items-center justify-between select-none overflow-hidden touch-none overscroll-none transition-colors duration-500 font-sans border-b ${
             isDark
               ? 'bg-[#07090e] text-white border-white/10 shadow-[0_30px_70px_rgba(0,0,0,0.8)]'
               : 'bg-gradient-to-b from-[#ffffff] via-[#f7f9fd] to-[#edf2f9] text-[#06080e] border-black/10 shadow-[0_20px_50px_rgba(0,74,215,0.15)]'

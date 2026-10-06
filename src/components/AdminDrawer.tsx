@@ -51,6 +51,9 @@ import {
   FileText,
   Printer,
   Mail,
+  Gift,
+  Ruler,
+  Type,
 } from 'lucide-react';
 import { useSiteControls, type SiteControlItem } from '../context/SiteControlsContext';
 import { ALL_SIZES, type Product, type Language, type ProductAvailability, type TrendItem } from '../types';
@@ -71,6 +74,9 @@ import ImageUploader from './ImageUploader';
 import AdminAnalyticsDashboard from './AdminAnalyticsDashboard';
 import SocialLinksManager from './SocialLinksManager';
 import AdminNewsletterManager from './AdminNewsletterManager';
+import AdminOffersManager from './AdminOffersManager';
+import AdminSizesManager from './AdminSizesManager';
+import AdminNewsletterBoxStudio from './AdminNewsletterBoxStudio';
 import { getStoredSubscribers } from '../lib/newsletter';
 import { AVAILABLE_SPLASH_MOTIFS } from './SplashLoader';
 import type { SplashMotifType } from '../context/SiteControlsContext';
@@ -79,7 +85,7 @@ interface Props {
   lang?: Language;
 }
 
-type TabType = 'analytics' | 'products' | 'banners' | 'social' | 'controls' | 'newsletter' | 'backup' | 'security';
+type TabType = 'analytics' | 'products' | 'sizes' | 'offers' | 'banners' | 'social' | 'controls' | 'newsletter' | 'welcome_modal' | 'backup' | 'security';
 
 export default function AdminDrawer({ lang = 'ar' }: Props) {
   const isAr = lang === 'ar';
@@ -121,6 +127,8 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
     setIsPreviewSplash,
     isPreviewMaintenance,
     setIsPreviewMaintenance,
+    isPreviewWelcomeModal,
+    setIsPreviewWelcomeModal,
     isCloudSynced,
     syncAllToSupabaseCloud,
   } = useSiteControls();
@@ -629,6 +637,16 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                   <Lock className="h-3 w-3" />
                   <span>{isAr ? 'تيست الصيانة' : 'Test Offline'}</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewWelcomeModal(true)}
+                  className="flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/20 hover:bg-emerald-500/40 active:scale-95 text-emerald-300 px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer shadow-sm"
+                  title={isAr ? 'اختبار ومعاينة النافذة الترحيبية للزبائن' : 'Test Welcome Popup'}
+                >
+                  <Gift className="h-3 w-3" />
+                  <span>{isAr ? 'تيست الترحيب' : 'Test Welcome'}</span>
+                </button>
               </div>
 
               {/* Currency Selector (Direct Supabase Cloud Sync) */}
@@ -690,9 +708,9 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
 
             <motion.div
               initial={{ scale: 0.94, opacity: 0 }}
-              animate={passwordError ? { x: [-8, 8, -6, 6, -3, 3, 0] } : { scale: 1, opacity: 1 }}
+              animate={passwordError ? { x: [-8, 8, -6, 6, -3, 3, 0], scale: 1, opacity: 1 } : { x: 0, scale: 1, opacity: 1 }}
               transition={{ duration: 0.35 }}
-              className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#10131d]/90 p-6 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
+              className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#10131d]/95 p-6 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
             >
               {/* Shield Icon Badge */}
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-[#004ad7]/25 to-[#004ad7]/5 border border-[#004ad7]/30 text-[#3b82f6] shadow-lg shadow-[#004ad7]/15 mb-4">
@@ -723,7 +741,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                     maxLength={40}
                     className={`h-12 w-full rounded-2xl border bg-black/60 px-10 text-center text-sm font-mono tracking-widest outline-none transition-all placeholder:text-white/20 ${
                       passwordError
-                        ? 'border-red-500/80 ring-2 ring-red-500/20 text-red-400'
+                        ? 'border-[#3b82f6] ring-2 ring-[#3b82f6]/35 text-white shadow-[0_0_15px_rgba(59,130,246,0.2)]'
                         : 'border-white/15 focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f6]/20 text-white'
                     }`}
                   />
@@ -742,10 +760,10 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-center gap-1.5 text-xs text-red-400 font-medium"
+                    className="flex items-center justify-center gap-1.5 text-xs text-[#93c5fd] font-medium"
                   >
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>{isAr ? 'رمز المرور غير صحيح، يرجى المحاولة ثانية' : 'Incorrect credentials, please retry'}</span>
+                    <AlertTriangle className="h-3.5 w-3.5 text-[#3b82f6] shrink-0" />
+                    <span>{isAr ? 'رمز المرور غير صحيح، يرجى إعادة المحاولة' : 'Incorrect credentials, please retry'}</span>
                   </motion.div>
                 )}
 
@@ -798,9 +816,35 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                   }`}
                 >
                   <Package className="h-4 w-4 text-emerald-400" />
-                  <span>{isAr ? 'إدارة الكتالوج والعروض' : 'Catalog & Special Offers'}</span>
+                  <span>{isAr ? 'إدارة الكتالوج والمنتجات' : 'Catalog & Products'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sizes')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'sizes'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Ruler className="h-4 w-4 text-[#3b82f6]" />
+                  <span>{isAr ? 'القياسات والأبعاد (المقاسات)' : 'Size Guide & Measurements'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('offers')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'offers'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Percent className="h-4 w-4 text-[#3b82f6]" />
+                  <span>{isAr ? 'التحكم بالعروض والخصومات' : 'Offers & Discounts'}</span>
                   {products.some((p) => p.is_offer) && (
-                    <span className="ltr:ml-auto rtl:mr-auto rounded-full bg-rose-500/20 px-1.5 py-0.2 text-[9px] text-rose-300 font-bold">
+                    <span className="ltr:ml-auto rtl:mr-auto rounded-full bg-[#004ad7]/25 border border-[#3b82f6]/40 px-2 py-0.5 text-[9.5px] font-mono text-[#60a5fa] font-bold">
                       {products.filter((p) => p.is_offer).length}
                     </span>
                   )}
@@ -861,6 +905,22 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                       {getStoredSubscribers().length}
                     </span>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('welcome_modal')}
+                  className={`flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === 'welcome_modal'
+                      ? 'bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                  }`}
+                >
+                  <Gift className="h-4 w-4 text-emerald-400" />
+                  <span>{isAr ? 'الرسالة الترحيبية والخصم' : 'Welcome Modal & Voucher'}</span>
+                  <span className="ltr:ml-auto rtl:mr-auto rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9.5px] font-mono text-emerald-300 font-bold">
+                    {siteSettings.welcome_coupon_code || '15%'}
+                  </span>
                 </button>
 
                 <button
@@ -1496,6 +1556,30 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* TAB 2.2: MASTER SIZES & MEASUREMENTS CONTROL CENTER */}
+              {activeTab === 'sizes' && (
+                <div className="max-w-6xl mx-auto">
+                  <AdminSizesManager isAr={isAr} />
+                </div>
+              )}
+
+              {/* TAB 2.5: OFFERS & DISCOUNTS CONTROL CENTER */}
+              {activeTab === 'offers' && (
+                <div className="max-w-6xl mx-auto">
+                  <AdminOffersManager
+                    isAr={isAr}
+                    onNavigateToStoreOffers={() => {
+                      setIsAdminOpen(false);
+                      // Trigger offers filter in store lookbook
+                      const offersBtn = document.querySelector('[role="tab"][aria-selected="false"]') as HTMLElement;
+                      if (offersBtn && offersBtn.innerText.includes('العروض')) {
+                        offersBtn.click();
+                      }
+                    }}
+                  />
                 </div>
               )}
 
@@ -2633,9 +2717,10 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                             </span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleVisibility(item.id)}
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => toggleVisibility(item.id)}
                             className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold border transition-all cursor-pointer ${
                               item.visible
                                 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
@@ -2646,6 +2731,7 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
                             <span>{item.visible ? (isAr ? 'ظاهر' : 'Visible') : (isAr ? 'مخفي' : 'Hidden')}</span>
                           </button>
                         </div>
+                      </div>
                       ))}
                   </div>
                 </div>
@@ -2846,7 +2932,14 @@ export default function AdminDrawer({ lang = 'ar' }: Props) {
               {/* TAB: NEWSLETTER SUBSCRIBERS & VIP CAMPAIGNS */}
               {activeTab === 'newsletter' && (
                 <div className="space-y-6 max-w-5xl mx-auto">
-                  <AdminNewsletterManager lang={isAr ? 'ar' : 'en'} embedded={true} />
+                  <AdminNewsletterManager lang={isAr ? 'ar' : 'en'} embedded={true} initialTab="subscribers" />
+                </div>
+              )}
+
+              {/* TAB: WELCOME MODAL & VIP VOUCHER SETTINGS */}
+              {activeTab === 'welcome_modal' && (
+                <div className="space-y-6 max-w-5xl mx-auto">
+                  <AdminNewsletterManager lang={isAr ? 'ar' : 'en'} embedded={true} initialTab="welcome_settings" />
                 </div>
               )}
 

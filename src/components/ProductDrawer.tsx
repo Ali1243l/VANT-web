@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { AnimatePresence, motion, useDragControls, type Variants } from 'framer-motion';
-import { ChevronLeft, ChevronRight, X, Check, AlertCircle, Copy, Ruler, MessageCircle, Truck, Share2, Sparkles } from 'lucide-react';
+import { AnimatePresence, motion, useMotionValue, useTransform, animate, type Variants } from 'framer-motion';
+import { ChevronLeft, ChevronRight, X, Check, AlertCircle, Copy, Ruler, MessageCircle, Truck, Share2, Sparkles, Tag } from 'lucide-react';
 import { ALL_SIZES, type Product, type Language, type Size } from '../types';
 import { formatPrice } from '../lib/supabase';
 import { DEFAULT_WHATSAPP_PHONE } from '../lib/constants';
 import ShareModal from './ShareModal';
 import ProductDrawerSkeleton from './ProductDrawerSkeleton';
-import { SIZE_GUIDE_DATA, calculateRecommendedSize } from '../data/sizeGuide';
+import { calculateRecommendedSize } from '../data/sizeGuide';
 import { useSiteControls } from '../context/SiteControlsContext';
 import { trackEvent } from '../lib/analytics';
 
@@ -48,10 +48,17 @@ const slideVariants: Variants = {
 
 
 export default function ProductDrawer({ product, loading, lang, onClose }: Props) {
-  const controls = useDragControls();
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [slideDirection, setSlideDirection] = useState(1);
-  const { getControl, formatPrice } = useSiteControls();
+  const { getControl, formatPrice, masterSizes } = useSiteControls();
   const whatsappControl = getControl('btn_product_whatsapp');
   const shareControl = getControl('btn_product_share');
   const copyControl = getControl('btn_product_copy');
@@ -60,11 +67,12 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
   const whatsappPhoneControl = getControl('cfg_whatsapp_phone');
   const bespokePhoneControl = getControl('cfg_bespoke_phone');
 
-  const [selectedSize, setSelectedSize] = useState<Size | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [sizeFeedback, setSizeFeedback] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [copiedTitle, setCopiedTitle] = useState(false);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const [sizeGuideTab, setSizeGuideTab] = useState<'calculator' | 'table'>('calculator');
   const [showShareModal, setShowShareModal] = useState(false);
   const [calcHeight, setCalcHeight] = useState<string>('');
   const [calcWeight, setCalcWeight] = useState<string>('');
@@ -75,8 +83,8 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
     const h = parseInt(calcHeight, 10);
     const w = parseInt(calcWeight, 10);
     if (isNaN(h) || isNaN(w) || h < 120 || h > 220 || w < 30 || w > 200) return null;
-    return calculateRecommendedSize(h, w);
-  }, [calcHeight, calcWeight]);
+    return calculateRecommendedSize(h, w, masterSizes);
+  }, [calcHeight, calcWeight, masterSizes]);
 
   // Robustly normalize images list with non-empty string validation
   const images = useMemo(() => {
@@ -154,11 +162,20 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
     }
   }, [activeImageIndex]);
 
-  // Keyboard navigation: ESC to close, Left/Right for gallery
+  // Keyboard navigation: ESC to close, Left/Right for gallery + Zero-Reflow Body Lock
   useEffect(() => {
     if (!product) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyPaddingRight = document.body.style.paddingRight;
+
+    // Only apply desktop scrollbar gutter compensation to prevent layout shift
+    if (!isMobile) {
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`;
+      }
+      document.body.style.overflow = 'hidden';
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -176,10 +193,13 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
 
     window.addEventListener('keydown', onKeyDown);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      if (!isMobile) {
+        document.body.style.overflow = prevBodyOverflow;
+        document.body.style.paddingRight = prevBodyPaddingRight;
+      }
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [product, onClose, paginate, lang, showSizeGuide]);
+  }, [product, onClose, paginate, lang, showSizeGuide, isMobile]);
 
   const availability = product?.availability ?? 'in_stock';
   const isSoldOut = availability === 'sold_out';
@@ -326,7 +346,7 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
     }
   };
 
-  const handleSizeClick = (size: Size) => {
+  const handleSizeClick = (size: string) => {
     setSelectedSize(size);
     if (product) {
       trackEvent('size_select', { productId: product.id, size, title: displayTitle });
@@ -352,93 +372,102 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
     }
   };
 
-  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  const renderedSizes = useMemo(() => {
+    const activeMaster = masterSizes.filter((s) => s.enabled).map((s) => s.size);
+    const prodSizes = (product?.sizes || []).map((s) => s);
+    if (prodSizes.length > 0) {
+      const list = [...activeMaster];
+      for (const ps of prodSizes) {
+        if (!list.includes(ps)) list.push(ps);
+      }
+      return list;
+    }
+    return activeMaster.length > 0 ? activeMaster : ALL_SIZES;
+  }, [product?.sizes, masterSizes]);
+
+  // Mobile & Modal Handlers
+  const dragY = useMotionValue(0);
+  const backdropOpacity = useTransform(dragY, [0, 280], [1, 0]);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    dragY.set(0);
+  }, [product, dragY]);
 
-  // Mobile Pull Down to Dismiss State & Handlers
-  const [sheetDragY, setSheetDragY] = useState(0);
-  const [isPullingDown, setIsPullingDown] = useState(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const pullDownTouchRef = useRef<{ startY: number; currentY: number; startTime: number }>({
-    startY: 0,
-    currentY: 0,
-    startTime: 0,
-  });
-
-  const handlePullStart = (e: React.TouchEvent) => {
-    if (!isMobile) return;
-    const clientY = e.touches[0].clientY;
-    pullDownTouchRef.current = { startY: clientY, currentY: clientY, startTime: Date.now() };
-    setIsPullingDown(true);
-  };
-
-  const handlePullMove = (e: React.TouchEvent) => {
-    if (!isPullingDown || !isMobile) return;
-    const clientY = e.touches[0].clientY;
-    pullDownTouchRef.current.currentY = clientY;
-    const deltaY = clientY - pullDownTouchRef.current.startY;
-
-    if (deltaY > 0) {
-      setSheetDragY(deltaY * 0.82);
-    } else {
-      setSheetDragY(0);
-    }
-  };
-
-  const handlePullEnd = () => {
-    if (!isPullingDown || !isMobile) return;
-    setIsPullingDown(false);
-    const deltaY = pullDownTouchRef.current.currentY - pullDownTouchRef.current.startY;
-    const elapsedTime = Math.max(1, Date.now() - pullDownTouchRef.current.startTime);
-    const velocity = deltaY / elapsedTime;
-
-    setSheetDragY(0);
-    if (deltaY > 65 || velocity > 0.35) {
-      onClose();
-    }
-  };
-
-  // Content area pull down when at scrollTop <= 0
-  const contentTouchRef = useRef<{ startY: number; startX: number; canPull: boolean }>({
+  const touchStateRef = useRef<{
+    startY: number;
+    startX: number;
+    startTime: number;
+    isDragging: boolean;
+  }>({
     startY: 0,
     startX: 0,
-    canPull: false,
+    startTime: 0,
+    isDragging: false,
   });
 
-  const handleContentTouchStart = (e: React.TouchEvent) => {
+  const onTouchStartDrag = (e: React.TouchEvent) => {
     if (!isMobile) return;
-    const isAtTop = !scrollContainerRef.current || scrollContainerRef.current.scrollTop <= 0;
-    contentTouchRef.current = {
-      startY: e.touches[0].clientY,
-      startX: e.touches[0].clientX,
-      canPull: isAtTop,
+    const touch = e.touches[0];
+    touchStateRef.current = {
+      startY: touch.clientY,
+      startX: touch.clientX,
+      startTime: Date.now(),
+      isDragging: true,
     };
   };
 
-  const handleContentTouchMove = (e: React.TouchEvent) => {
-    if (!isMobile || !contentTouchRef.current.canPull) return;
-    const deltaY = e.touches[0].clientY - contentTouchRef.current.startY;
-    const deltaX = e.touches[0].clientX - contentTouchRef.current.startX;
+  const onTouchMoveDrag = (e: React.TouchEvent) => {
+    if (!isMobile || !touchStateRef.current.isDragging) return;
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - touchStateRef.current.startY;
+    const deltaX = touch.clientX - touchStateRef.current.startX;
 
-    if (deltaY > 10 && deltaY > Math.abs(deltaX) * 1.5) {
-      if (scrollContainerRef.current && scrollContainerRef.current.scrollTop <= 0) {
-        setIsPullingDown(true);
-        pullDownTouchRef.current.currentY = e.touches[0].clientY;
-        setSheetDragY(deltaY * 0.72);
-      }
+    // Follow finger directly when dragging downwards with ultra-high sensitivity
+    if (deltaY > 0 && deltaY > Math.abs(deltaX) * 0.35) {
+      dragY.set(deltaY);
+    } else if (deltaY < 0) {
+      // Elastic resistance if dragged upwards
+      dragY.set(deltaY * 0.12);
     }
   };
 
-  const handleContentTouchEnd = () => {
-    if (isPullingDown) {
-      handlePullEnd();
+  const onTouchEndDrag = () => {
+    if (!isMobile || !touchStateRef.current.isDragging) return;
+    touchStateRef.current.isDragging = false;
+
+    const currentDeltaY = dragY.get();
+    const elapsedTime = Math.max(1, Date.now() - touchStateRef.current.startTime);
+    const velocity = currentDeltaY / elapsedTime;
+
+    // Dismiss if dragged > 35px down or flicked with velocity > 0.15
+    if (currentDeltaY > 35 || velocity > 0.15) {
+      animate(dragY, typeof window !== 'undefined' ? window.innerHeight : 600, {
+        duration: 0.20,
+        ease: [0.32, 0.72, 0, 1],
+        onComplete: () => {
+          onClose();
+        },
+      });
+    } else {
+      // Snap back smoothly to open position
+      animate(dragY, 0, { type: 'spring', damping: 28, stiffness: 350 });
     }
   };
+
+  const handleClose = useCallback(() => {
+    if (isMobile) {
+      animate(dragY, typeof window !== 'undefined' ? window.innerHeight : 600, {
+        duration: 0.20,
+        ease: [0.32, 0.72, 0, 1],
+        onComplete: () => {
+          onClose();
+        },
+      });
+    } else {
+      onClose();
+    }
+  }, [isMobile, dragY, onClose]);
 
   // High-Performance Cross-Platform Pointer Carousel
   const [carouselDragOffset, setCarouselDragOffset] = useState(0);
@@ -516,13 +545,7 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
       }
     }
 
-    if (carouselPointerRef.current.lockDirection === 'vertical') {
-      if (deltaY > 0 && isMobile) {
-        setIsPullingDown(true);
-        pullDownTouchRef.current.currentY = clientY;
-        setSheetDragY(deltaY * 0.75);
-      }
-    } else if (carouselPointerRef.current.lockDirection === 'horizontal') {
+    if (carouselPointerRef.current.lockDirection === 'horizontal') {
       if (images.length > 1) {
         // Natural 1:1 drag with rubber-band resistance at boundaries
         let offset = deltaX;
@@ -552,18 +575,10 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
     carouselPointerRef.current.pointerId = null;
 
     const deltaX = currentX - startX;
-    const deltaY = currentY - startY;
     const duration = Math.max(1, Date.now() - startTime);
     const velocityX = deltaX / duration;
-    const velocityY = deltaY / duration;
 
-    if (lockDirection === 'vertical') {
-      setIsPullingDown(false);
-      setSheetDragY(0);
-      if (deltaY > 65 || velocityY > 0.35) {
-        onClose();
-      }
-    } else if (lockDirection === 'horizontal' && images.length > 1) {
+    if (lockDirection === 'horizontal' && images.length > 1) {
       const threshold = 40;
       const isFlick = Math.abs(velocityX) > 0.2;
 
@@ -608,51 +623,53 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
   return (
     <AnimatePresence>
       {loading && !product && (
-        <ProductDrawerSkeleton lang={lang} onClose={onClose} />
+        <ProductDrawerSkeleton key="skeleton" lang={lang} onClose={onClose} />
       )}
       {product && (
-        <>
-          {/* Backdrop with click to dismiss and clean blur fade */}
+        <div
+          key="drawer-modal-container"
+          className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none md:items-center p-0 md:p-6 lg:p-8 xl:p-10"
+        >
+          {/* Backdrop with click to dismiss */}
           <motion.div
             key="backdrop"
-            className="fixed inset-0 z-40 bg-black/65 dark:bg-black/80 backdrop-blur-md"
+            style={isMobile ? { opacity: backdropOpacity } : undefined}
+            className="fixed inset-0 bg-black/45 dark:bg-black/60 pointer-events-auto touch-none will-change-opacity"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={isMobile ? undefined : { opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            onClick={onClose}
+            transition={isMobile ? { duration: 0 } : { duration: 0.22, ease: 'easeOut' }}
+            onClick={handleClose}
           />
 
-          {/* Responsive Sheet/Modal Container */}
-          <div className="fixed inset-0 z-50 flex items-end justify-center pointer-events-none md:items-center md:p-6 lg:p-10">
-            <motion.div
-              key="sheet-content"
-              role="dialog"
-              aria-modal="true"
-              aria-label={displayTitle}
-              className="pointer-events-auto relative flex w-full flex-col overflow-hidden bg-[#f8f9fa] dark:bg-[#16191f] shadow-2xl transition-colors duration-250 
-                         rounded-t-[28px] max-h-[92dvh]
-                         md:max-h-[86vh] md:max-w-4xl lg:max-w-5xl md:rounded-[32px] md:border md:border-black/5 md:dark:border-white/10 will-change-transform"
-              initial={isMobile ? { y: '100%', opacity: 0.6 } : { opacity: 0, scale: 0.95, y: 18 }}
-              animate={isMobile ? { y: isPullingDown ? sheetDragY : 0, opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-              exit={isMobile ? { y: '100%', opacity: 0 } : { opacity: 0, scale: 0.96, y: 14 }}
-              transition={
-                isPullingDown
-                  ? { type: 'tween', duration: 0 }
-                  : isMobile
-                  ? { type: 'spring', damping: 30, stiffness: 350, mass: 0.85 }
-                  : { type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }
-              }
-            >
-              {/* Mobile Drag to Close Zone (Large comfortable touch area) */}
+          {/* Responsive Sheet/Modal Panel */}
+          <motion.div
+            key={`sheet-panel-${product.id}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={displayTitle}
+            style={isMobile ? { y: dragY } : undefined}
+            className="pointer-events-auto relative z-10 flex w-full flex-col overflow-hidden bg-[#f8f9fa] dark:bg-[#16191f] shadow-2xl transition-colors duration-250 
+                       rounded-t-[28px] sm:rounded-t-[32px] h-[95dvh] max-h-[100dvh]
+                       md:h-auto md:max-h-[88vh] md:max-w-4xl lg:max-w-5xl xl:max-w-6xl md:rounded-[32px] md:border md:border-black/5 md:dark:border-white/10 will-change-transform"
+            initial={isMobile ? { y: '100%' } : { opacity: 0, scale: 0.96, y: 12 }}
+            animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 12 }}
+            transition={
+              isMobile
+                ? { duration: 0 }
+                : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }
+            }
+          >
+              {/* Mobile Drag to Close Zone (Direct 1:1 hardware follower) */}
               <div
-                className="flex flex-col shrink-0 items-center justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing md:hidden select-none touch-none"
-                onTouchStart={handlePullStart}
-                onTouchMove={handlePullMove}
-                onTouchEnd={handlePullEnd}
-                onTouchCancel={handlePullEnd}
+                className="flex flex-col shrink-0 items-center justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing md:hidden select-none touch-none w-full"
+                onTouchStart={onTouchStartDrag}
+                onTouchMove={onTouchMoveDrag}
+                onTouchEnd={onTouchEndDrag}
+                onTouchCancel={onTouchEndDrag}
               >
-                <div className="h-1.5 w-12 rounded-full bg-black/25 dark:bg-white/25 active:bg-black/45 transition-colors" />
+                <div className="h-1.5 w-12 rounded-full bg-black/30 dark:bg-white/30 active:bg-black/50 transition-colors" />
                 <span className="mt-1 text-[10px] font-medium text-black/40 dark:text-white/40 tracking-wider select-none">
                   {lang === 'ar' ? 'اسحب للأسفل للإغلاق' : 'Swipe down to close'}
                 </span>
@@ -661,31 +678,28 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
               {/* Dedicated Close Button (Visible on both desktop and mobile) */}
               <button
                 type="button"
-                onClick={onClose}
-                className="absolute top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 dark:bg-[#0d0f12]/80 text-[#15171c] dark:text-white backdrop-blur-md shadow-xs border border-black/5 dark:border-white/10 transition-all hover:bg-white dark:hover:bg-[#0d0f12] active:scale-95 ltr:right-4 rtl:left-4 cursor-pointer"
+                onClick={handleClose}
+                className="absolute top-4 md:top-5 z-20 flex h-9 w-9 md:h-12 md:w-12 items-center justify-center rounded-full bg-white/80 dark:bg-[#0d0f12]/80 text-[#15171c] dark:text-white backdrop-blur-md shadow-xs border border-black/5 dark:border-white/10 transition-all hover:bg-white dark:hover:bg-[#0d0f12] active:scale-95 ltr:right-4 rtl:left-4 md:ltr:right-5 md:rtl:left-5 cursor-pointer"
                 aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4 md:h-5 md:w-5" />
               </button>
 
               {/* Responsive Layout Grid (Split screen on Desktop, Stack on Mobile) */}
               <div
                 ref={scrollContainerRef}
-                onTouchStart={handleContentTouchStart}
-                onTouchMove={handleContentTouchMove}
-                onTouchEnd={handleContentTouchEnd}
-                className="grid flex-1 overflow-y-auto overscroll-contain md:grid-cols-12 md:overflow-hidden"
+                className="grid flex-1 overflow-y-auto overscroll-contain touch-pan-y md:grid-cols-12 md:overflow-hidden"
               >
-                {/* GALLERY SECTION (Column 1-7 on desktop, Unified LTR Media Track for 100% Spatial Agreement) */}
+                {/* GALLERY SECTION (Column 1-6 on desktop, Unified LTR Media Track for 100% Spatial Agreement) */}
                 <div
                   dir="ltr"
-                  className="relative flex flex-col justify-between bg-black/[0.02] dark:bg-black/20 p-4 sm:p-6 md:col-span-7 md:border-e md:border-black/5 md:dark:border-white/10 md:overflow-y-auto [direction:ltr]"
+                  className="relative flex flex-col justify-between bg-black/[0.02] dark:bg-black/20 p-4 sm:p-6 md:p-7 lg:p-8 md:col-span-6 md:border-e md:border-black/5 md:dark:border-white/10 md:overflow-y-auto [direction:ltr] no-scrollbar"
                 >
                   {/* Main Active Image Viewport with Stable Luxury Aspect Ratio */}
                   <div
                     ref={carouselViewportRef}
                     dir="ltr"
-                    className="relative flex items-center justify-center w-full max-w-full overflow-hidden rounded-3xl bg-gradient-to-b from-black/[0.03] to-black/[0.07] dark:from-white/[0.02] dark:to-white/[0.05] border border-black/5 dark:border-white/10 touch-pan-y select-none cursor-grab active:cursor-grabbing [direction:ltr] shadow-inner aspect-[3/4] max-h-[64vh] md:max-h-[520px] mx-auto"
+                    className="relative flex items-center justify-center w-full max-w-full overflow-hidden rounded-3xl bg-gradient-to-b from-black/[0.03] to-black/[0.07] dark:from-white/[0.02] dark:to-white/[0.05] border border-black/5 dark:border-white/10 touch-pan-y select-none cursor-grab active:cursor-grabbing [direction:ltr] shadow-inner aspect-[3/4] max-h-[58vh] sm:max-h-[64vh] md:max-h-[580px] lg:max-h-[640px] xl:max-h-[680px] mx-auto"
                     onPointerDown={onCarouselPointerDown}
                     onPointerMove={onCarouselPointerMove}
                     onPointerUp={onCarouselPointerUp}
@@ -768,14 +782,14 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
                             e.stopPropagation();
                             if (activeImageIndex > 0) paginate(-1);
                           }}
-                          className={`absolute left-2.5 sm:left-3.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 dark:bg-[#16191f]/90 text-[#15171c] dark:text-white backdrop-blur-md shadow-lg border border-black/10 dark:border-white/15 transition-all ${
+                          className={`absolute left-2.5 sm:left-3.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 lg:h-13 lg:w-13 items-center justify-center rounded-full bg-white/90 dark:bg-[#16191f]/90 text-[#15171c] dark:text-white backdrop-blur-md shadow-lg border border-black/10 dark:border-white/15 transition-all ${
                             activeImageIndex > 0
                               ? 'hover:scale-110 active:scale-95 cursor-pointer opacity-100'
                               : 'opacity-0 pointer-events-none'
                           }`}
                           aria-label={lang === 'ar' ? 'الصورة السابقة' : 'Previous image'}
                         >
-                          <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5 md:h-5.5 md:w-5.5 lg:h-6 lg:w-6" />
                         </button>
 
                         <button
@@ -787,14 +801,14 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
                             e.stopPropagation();
                             if (activeImageIndex < images.length - 1) paginate(1);
                           }}
-                          className={`absolute right-2.5 sm:right-3.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 dark:bg-[#16191f]/90 text-[#15171c] dark:text-white backdrop-blur-md shadow-lg border border-black/10 dark:border-white/15 transition-all ${
+                          className={`absolute right-2.5 sm:right-3.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 lg:h-13 lg:w-13 items-center justify-center rounded-full bg-white/90 dark:bg-[#16191f]/90 text-[#15171c] dark:text-white backdrop-blur-md shadow-lg border border-black/10 dark:border-white/15 transition-all ${
                             activeImageIndex < images.length - 1
                               ? 'hover:scale-110 active:scale-95 cursor-pointer opacity-100'
                               : 'opacity-0 pointer-events-none'
                           }`}
                           aria-label={lang === 'ar' ? 'الصورة التالية' : 'Next image'}
                         >
-                          <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 md:h-5.5 md:w-5.5 lg:h-6 lg:w-6" />
                         </button>
 
                         {/* Refined Luxury Floating Image Counter Badge (Compact & Elegant) */}
@@ -847,404 +861,210 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
                     <div
                       ref={thumbnailContainerRef}
                       dir="ltr"
-                      className="mt-4 flex items-center justify-start sm:justify-center gap-2.5 overflow-x-auto py-1 px-2 no-scrollbar scroll-smooth [direction:ltr]"
+                      className="mt-4 flex items-center justify-center overflow-x-auto py-1 px-2 no-scrollbar scroll-smooth [direction:ltr] w-full"
                     >
-                      {images.map((img, idx) => {
-                        const isActive = idx === activeImageIndex;
-                        return (
-                          <button
-                            key={idx}
-                            ref={(el) => {
-                              thumbnailItemRefs.current[idx] = el;
-                            }}
-                            dir="ltr"
-                            type="button"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={() => {
-                              setSlideDirection(idx > activeImageIndex ? 1 : -1);
-                              setActiveImageIndex(idx);
-                            }}
-                            className={`group relative h-16 w-16 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-2xl transition-all duration-200 active:scale-95 cursor-pointer [direction:ltr] ${
-                              isActive
-                                ? 'ring-2 ring-[#004ad7] dark:ring-[#3b82f6] ring-offset-2 ring-offset-[#f8f9fa] dark:ring-offset-[#16191f] shadow-md scale-105'
-                                : 'opacity-60 hover:opacity-100 hover:scale-100 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5'
-                            }`}
-                            aria-label={`View image ${idx + 1}`}
-                          >
-                            <img
-                              src={img}
-                              alt=""
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                            />
-
-                            {/* Thumbnail Index Pill */}
-                            <span className="absolute bottom-1 right-1 z-10 rounded-md bg-black/65 px-1 py-0.2 text-[9px] font-mono font-bold text-white backdrop-blur-xs">
-                              {idx + 1}
-                            </span>
-
-                            {isActive && (
-                              <motion.div
-                                layoutId="active-thumb-glow"
-                                className="absolute inset-0 bg-[#004ad7]/15 dark:bg-[#3b82f6]/20 ring-1 ring-inset ring-white/30"
+                      <div className="flex items-center justify-center gap-2 sm:gap-2.5 mx-auto min-w-fit">
+                        {images.map((img, idx) => {
+                          const isActive = idx === activeImageIndex;
+                          return (
+                            <button
+                              key={idx}
+                              ref={(el) => {
+                                thumbnailItemRefs.current[idx] = el;
+                              }}
+                              dir="ltr"
+                              type="button"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={() => {
+                                setSlideDirection(idx > activeImageIndex ? 1 : -1);
+                                setActiveImageIndex(idx);
+                              }}
+                              className={`group relative h-14 w-14 sm:h-16 sm:w-16 md:h-18 md:w-18 shrink-0 overflow-hidden rounded-2xl transition-all duration-200 active:scale-95 cursor-pointer [direction:ltr] ${
+                                isActive
+                                  ? 'ring-2 ring-[#004ad7] dark:ring-[#3b82f6] ring-offset-2 ring-offset-[#f8f9fa] dark:ring-offset-[#16191f] shadow-md scale-105'
+                                  : 'opacity-60 hover:opacity-100 hover:scale-100 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5'
+                              }`}
+                              aria-label={`View image ${idx + 1}`}
+                            >
+                              <img
+                                src={img}
+                                alt=""
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                               />
-                            )}
-                          </button>
-                        );
-                      })}
+
+                              {/* Thumbnail Index Pill */}
+                              <span className="absolute bottom-1 right-1 z-10 rounded-md bg-black/65 px-1 py-0.2 text-[8.5px] font-mono font-bold text-white backdrop-blur-xs">
+                                {idx + 1}
+                              </span>
+
+                              {isActive && (
+                                <motion.div
+                                  layoutId="active-thumb-glow"
+                                  className="absolute inset-0 bg-[#004ad7]/15 dark:bg-[#3b82f6]/20 ring-1 ring-inset ring-white/30"
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* DETAILS SECTION (Selector 2: Details Column with Quick Copy & Size Guide) */}
-                <div className="flex flex-col justify-between p-6 sm:p-8 md:col-span-5 md:overflow-y-auto">
-                  <div>
-                    {/* Quiet Category & Availability Status Badge */}
-                    <div className="flex flex-wrap items-center gap-2">
+                {/* DETAILS SECTION: Spacious, Architectural & Uncluttered Luxury Layout (50/50 Balanced on Desktop) */}
+                <div className="flex flex-col justify-between p-4 sm:p-6 md:p-7 lg:p-8 md:col-span-6 lg:col-span-6 md:overflow-y-auto no-scrollbar">
+                  {/* Top Details Body */}
+                  <div className="space-y-4 sm:space-y-5 md:space-y-6">
+                    {/* 1. Header Metadata: Category + Availability Badge (With Safe Clearance from Close Button) */}
+                    <div className="flex items-center gap-2 flex-wrap ltr:pe-12 rtl:pe-12 md:ltr:pe-16 md:rtl:pe-16">
                       {displayCategory && (
-                        <p className="text-xs font-semibold tracking-widest uppercase text-[#6b7280] dark:text-[#9ca3af]">
+                        <span className="text-[11px] md:text-xs font-bold tracking-widest uppercase text-[#6b7280] dark:text-[#9ca3af]">
                           {displayCategory}
-                        </p>
+                        </span>
                       )}
-                      <span className="text-black/20 dark:text-white/20">•</span>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border backdrop-blur-md ${statusBadgeClasses}`}>
+                      {displayCategory && <span className="text-black/20 dark:text-white/20">•</span>}
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 md:px-3 py-0.5 md:py-1 text-[10px] md:text-xs font-semibold border backdrop-blur-md ${statusBadgeClasses}`}>
                         {statusDotClass && <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass}`} />}
                         <span>{statusBadgeLabel}</span>
                       </span>
                     </div>
 
-                    {/* Prominent Availability Status Banner */}
-                    <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-[#004ad7]/15 dark:border-[#3b82f6]/20 bg-[#004ad7]/[0.05] dark:bg-[#3b82f6]/[0.08] px-3.5 py-2 text-xs text-[#15171c] dark:text-white/90">
-                      <span className="flex h-2 w-2 rounded-full bg-[#004ad7] dark:bg-[#3b82f6] shrink-0" />
-                      <span dir="auto" className="font-medium leading-relaxed">{statusBannerText}</span>
-                    </div>
-
-                    {/* Title - Full Width, Straight and Prominent Editorial Typography */}
+                    {/* 2. Editorial Title */}
                     <h2
                       dir="auto"
-                      className="mt-3 text-2xl sm:text-3xl font-bold leading-tight text-[#15171c] dark:text-white"
+                      className="text-xl sm:text-2xl md:text-2xl lg:text-[28px] xl:text-3xl font-extrabold leading-snug tracking-tight text-[#15171c] dark:text-white"
                     >
                       {displayTitle}
                     </h2>
 
-                    {/* Price & Action Row (Copy & Share moved down here for clean balance) */}
-                    <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-                      <p className="text-2xl sm:text-3xl font-bold tabular-nums text-[#004ad7] dark:text-[#3b82f6]">
-                        {formatPrice(product.price)}
-                      </p>
-
-                      {/* Action Buttons: Share & Copy (Controlled via SiteControls) */}
-                      <div className="flex items-center gap-2">
-                        {/* Piece Share Button */}
-                        {shareControl.visible && (
-                          <button
-                            type="button"
-                            onClick={() => setShowShareModal(true)}
-                            className="flex items-center gap-1.5 rounded-full border border-black/10 dark:border-white/15 bg-white/80 dark:bg-white/10 px-3 py-1.5 text-xs font-medium text-[#15171c] dark:text-white hover:border-[#004ad7] dark:hover:border-[#3b82f6] transition-all active:scale-95 shadow-2xs cursor-pointer"
-                            title={lang === 'ar' ? shareControl.label_ar : shareControl.label_en}
-                            aria-label={lang === 'ar' ? shareControl.label_ar : shareControl.label_en}
-                          >
-                            <Share2 className="h-3.5 w-3.5 text-[#004ad7] dark:text-[#3b82f6]" />
-                            <span>{lang === 'ar' ? shareControl.label_ar : shareControl.label_en}</span>
-                          </button>
-                        )}
-
-                        {/* Quick Copy Button */}
+                    {/* Quick Actions (Share & Copy Title) - Positioned safely and clearly below the title, free from close button overlap */}
+                    {(shareControl.visible || copyControl.visible) && (
+                      <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap pt-0.5">
                         {copyControl.visible && (
                           <button
                             type="button"
                             onClick={handleCopyTitle}
-                            className="flex items-center gap-1.5 rounded-full border border-black/10 dark:border-white/15 bg-white/80 dark:bg-white/10 px-3 py-1.5 text-xs font-medium text-[#15171c] dark:text-white hover:border-[#004ad7] dark:hover:border-[#3b82f6] transition-all active:scale-95 shadow-2xs cursor-pointer"
+                            className="relative flex h-8.5 sm:h-9 md:h-10 lg:h-10.5 items-center gap-1.5 md:gap-2 rounded-full border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/10 px-3 sm:px-3.5 md:px-4 text-[11px] sm:text-xs md:text-[13px] text-[#15171c] dark:text-white hover:border-[#004ad7] dark:hover:border-[#3b82f6] hover:text-[#004ad7] dark:hover:text-[#3b82f6] transition-all active:scale-95 cursor-pointer shadow-2xs font-semibold select-none"
                             title={lang === 'ar' ? copyControl.label_ar : copyControl.label_en}
-                            aria-label={lang === 'ar' ? copyControl.label_ar : copyControl.label_en}
                           >
                             {copiedTitle ? (
                               <>
-                                <Check className="h-3.5 w-3.5 text-[#004ad7] dark:text-[#3b82f6]" />
-                                <span className="font-semibold text-[#004ad7] dark:text-[#3b82f6]">
-                                  {lang === 'ar' ? 'تم النسخ!' : 'Copied!'}
+                                <Check className="h-3.5 w-3.5 md:h-4 md:w-4 text-[#004ad7] dark:text-[#3b82f6] shrink-0" />
+                                <span className="font-bold text-[#004ad7] dark:text-[#3b82f6]">
+                                  {lang === 'ar' ? 'تم النسخ' : 'Copied'}
                                 </span>
                               </>
                             ) : (
                               <>
-                                <Copy className="h-3.5 w-3.5 text-[#6b7280] dark:text-[#9ca3af]" />
-                                <span>{lang === 'ar' ? copyControl.label_ar : copyControl.label_en}</span>
+                                <Copy className="h-3.5 w-3.5 md:h-4 md:w-4 text-[#6b7280] dark:text-[#9ca3af] shrink-0" />
+                                <span>
+                                  {lang === 'ar' ? copyControl.label_ar : copyControl.label_en}
+                                </span>
                               </>
                             )}
                           </button>
                         )}
+
+                        {shareControl.visible && (
+                          <button
+                            type="button"
+                            onClick={() => setShowShareModal(true)}
+                            className="flex h-8.5 sm:h-9 md:h-10 lg:h-10.5 items-center gap-1.5 md:gap-2 rounded-full border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.06] dark:hover:bg-white/10 px-3 sm:px-3.5 md:px-4 text-[11px] sm:text-xs md:text-[13px] text-[#15171c] dark:text-white hover:border-[#004ad7] dark:hover:border-[#3b82f6] hover:text-[#004ad7] dark:hover:text-[#3b82f6] transition-all active:scale-95 cursor-pointer shadow-2xs font-semibold select-none"
+                            title={lang === 'ar' ? shareControl.label_ar : shareControl.label_en}
+                            aria-label={lang === 'ar' ? shareControl.label_ar : shareControl.label_en}
+                          >
+                            <Share2 className="h-3.5 w-3.5 md:h-4 md:w-4 text-[#6b7280] dark:text-[#9ca3af] shrink-0" />
+                            <span>
+                              {lang === 'ar' ? shareControl.label_ar : shareControl.label_en}
+                            </span>
+                          </button>
+                        )}
                       </div>
+                    )}
+
+                    {/* 3. Luxury Price & Offer Showcase */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-baseline gap-2.5">
+                          <p className="text-2xl sm:text-3xl md:text-3xl lg:text-4xl font-extrabold tabular-nums text-[#004ad7] dark:text-[#3b82f6] tracking-tight">
+                            {formatPrice(product.price)}
+                          </p>
+                          {product.is_offer && product.original_price && product.original_price > product.price && (
+                            <span className="text-sm sm:text-base md:text-lg text-black/35 dark:text-white/40 line-through tabular-nums font-mono font-medium">
+                              {formatPrice(product.original_price)}
+                            </span>
+                          )}
+                        </div>
+
+                        {product.is_offer && (
+                          <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 md:px-3.5 md:py-1.5 lg:px-4 lg:py-2 text-xs md:text-sm lg:text-[15px] font-bold bg-[#004ad7]/10 dark:bg-[#3b82f6]/15 border border-[#004ad7]/25 dark:border-[#3b82f6]/35 text-[#004ad7] dark:text-[#60a5fa] shadow-2xs">
+                            <Tag className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0" />
+                            <span>{lang === 'ar' ? (product.offer_badge_ar || 'عرض خاص') : (product.offer_badge_en || 'Special Offer')}</span>
+                            {product.original_price && product.original_price > product.price && (
+                              <span dir="ltr" className="rounded-md bg-[#004ad7] dark:bg-[#3b82f6] text-white px-1.5 py-0.2 font-mono font-black text-[10px] md:text-xs">
+                                -{Math.round(((product.original_price - product.price) / product.original_price) * 100)}%
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Single clean status strip if not regular in_stock */}
+                      {availability !== 'in_stock' && (
+                        <div className="flex items-center gap-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/5 dark:border-white/10 px-3 py-2 text-xs md:text-sm text-[#15171c] dark:text-white/85">
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${statusDotClass || 'bg-[#004ad7]'}`} />
+                          <span dir="auto" className="leading-snug">{statusBannerText}</span>
+                        </div>
+                      )}
                     </div>
 
+                    {/* 4. Description */}
                     {displayDescription && (
                       <p
                         dir="auto"
-                        className="mt-4 text-sm leading-relaxed text-[#15171c]/75 dark:text-white/70"
+                        className="text-xs sm:text-sm md:text-sm lg:text-[15px] leading-relaxed text-[#15171c]/70 dark:text-white/70"
                       >
                         {displayDescription}
                       </p>
                     )}
 
-                    {/* Interactive Size Selection Matrix & Size Guide Trigger */}
-                    <div className="mt-6 border-t border-black/8 dark:border-white/10 pt-5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <h3 className="text-sm font-semibold text-[#15171c] dark:text-white">
-                            {isSoldOut
-                              ? lang === 'ar'
-                                ? 'المقاسات (نفدت جميع المقاسات)'
-                                : 'Sizes (All Sizes Sold Out)'
-                              : availability === 'coming_soon'
-                              ? lang === 'ar'
-                                ? 'المقاسات المتاحة للحجز المسبق'
-                                : 'Sizes for Pre-Order'
-                              : lang === 'ar'
-                              ? 'المقاسات المتوفرة'
-                              : 'Available Sizes'}
-                          </h3>
-                          {/* Size Guide Trigger Button (Controlled via SiteControls) */}
-                          {sizeGuideControl.visible && (
-                            <button
-                              type="button"
-                              onClick={() => setShowSizeGuide(!showSizeGuide)}
-                              className="flex items-center gap-1 text-xs font-medium text-[#004ad7] dark:text-[#3b82f6] hover:underline cursor-pointer"
-                            >
-                              <Ruler className="h-3.5 w-3.5" />
-                              <span>{lang === 'ar' ? sizeGuideControl.label_ar : sizeGuideControl.label_en}</span>
-                            </button>
+                    <div className="h-px w-full bg-black/5 dark:bg-white/5" />
+
+                    {/* 5. Clean Sizing & Fit Section */}
+                    <div className="space-y-3">
+                      {/* Sizing Header Row: Title + Guide Trigger */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs md:text-sm font-bold text-[#15171c] dark:text-white uppercase tracking-wider">
+                            {lang === 'ar' ? 'المقاس:' : 'Size:'}
+                          </span>
+                          {selectedSize ? (
+                            <span className="rounded-lg bg-[#004ad7] text-white px-2 py-0.5 md:px-3 md:py-1 text-xs md:text-sm font-bold shadow-2xs">
+                              {selectedSize}
+                            </span>
+                          ) : (
+                            <span className="text-xs md:text-sm text-[#6b7280] dark:text-[#9ca3af]">
+                              {lang === 'ar' ? 'يرجى اختيار مقاسك' : 'Please select'}
+                            </span>
                           )}
                         </div>
 
-                        {selectedSize && (
-                          <span className="text-xs font-semibold text-[#004ad7] dark:text-[#3b82f6]">
-                            {lang === 'ar' ? `المقاس: ${selectedSize}` : `Selected: ${selectedSize}`}
-                          </span>
+                        {sizeGuideControl.visible && (
+                          <button
+                            type="button"
+                            onClick={() => setShowSizeGuide(!showSizeGuide)}
+                            className="inline-flex items-center gap-1.5 md:gap-2 rounded-full px-2.5 py-1 md:h-10 md:px-4 lg:h-10.5 lg:px-4.5 bg-black/[0.03] dark:bg-white/[0.05] border border-black/8 dark:border-white/10 text-xs md:text-sm font-semibold text-[#004ad7] dark:text-[#3b82f6] hover:bg-[#004ad7]/10 dark:hover:bg-[#3b82f6]/15 cursor-pointer transition-all active:scale-95"
+                          >
+                            <Ruler className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                            <span>{lang === 'ar' ? sizeGuideControl.label_ar : sizeGuideControl.label_en}</span>
+                          </button>
                         )}
                       </div>
 
-                      {/* Sold Out Sizes Clarification Note */}
-                      {isSoldOut && (
-                        <p className="mt-1.5 text-[11px] text-[#6b7280] dark:text-[#9ca3af]">
-                          {lang === 'ar'
-                            ? 'انتهت الكميات المتوفرة لجميع القياسات أعلاه. يمكنك اختيار مقاسك للطلب الفوري لإعادة التوفير.'
-                            : 'All standard sizes are currently sold out. Tap your desired size to request a restock.'}
-                        </p>
-                      )}
-
-                      {/* Expandable Size Guide Panel with Dynamic Smart Fit Recommender */}
-                      <AnimatePresence>
-                        {showSizeGuide && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.25, ease: 'easeInOut' }}
-                            className="overflow-hidden mt-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-[#20242c]/90 p-4 shadow-sm"
-                          >
-                            <div className="flex items-center justify-between pb-2.5 border-b border-black/5 dark:border-white/10">
-                              <div className="flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-[#004ad7] dark:text-[#3b82f6]" />
-                                <span className="text-xs font-semibold text-[#15171c] dark:text-white">
-                                  {lang === 'ar' ? 'دليل المقاسات الذكي والمخصص' : 'Dynamic Fit Guide & Calculator'}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setShowSizeGuide(false)}
-                                className="text-[#6b7280] dark:text-[#9ca3af] hover:text-black dark:hover:text-white cursor-pointer"
-                                aria-label={lang === 'ar' ? 'إغلاق الدليل' : 'Close guide'}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-
-                            {/* 1. Dynamic Smart Fit Calculator Input Box */}
-                            <div className="mt-3 rounded-xl border border-[#004ad7]/20 dark:border-[#3b82f6]/25 bg-[#004ad7]/[0.03] dark:bg-[#3b82f6]/[0.06] p-3">
-                              <span className="text-[11px] font-semibold text-[#004ad7] dark:text-[#3b82f6] block mb-2">
-                                {lang === 'ar'
-                                  ? 'اقتراح المقاس التلقائي — أدخل طولك ووزنك:'
-                                  : 'Smart Fit Recommender — Enter height & weight:'}
-                              </span>
-                              {/* Inputs with Strict Adult Validation */}
-                              {(() => {
-                                const heightNum = calcHeight ? parseInt(calcHeight, 10) : null;
-                                const weightNum = calcWeight ? parseInt(calcWeight, 10) : null;
-                                const isHeightInvalid = calcHeight.length === 3 && (heightNum! < 120 || heightNum! > 220);
-                                const isWeightInvalid = calcWeight.length >= 2 && (weightNum! < 30 || weightNum! > 200);
-
-                                return (
-                                  <>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div>
-                                        <label className="text-[10px] text-[#6b7280] dark:text-[#9ca3af] block mb-1">
-                                          {lang === 'ar' ? 'الطول (120 - 220 سم)' : 'Height (120 - 220 cm)'}
-                                        </label>
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          maxLength={3}
-                                          placeholder={lang === 'ar' ? '3 أرقام (مثال: 175)' : '3 digits (e.g. 175)'}
-                                          value={calcHeight}
-                                          onChange={(e) => {
-                                            const val = e.target.value.replace(/\D/g, '').slice(0, 3);
-                                            setCalcHeight(val);
-                                          }}
-                                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs text-[#15171c] dark:text-white outline-none transition-colors ${
-                                            isHeightInvalid
-                                              ? 'border-red-500 bg-red-500/10 dark:bg-red-500/15'
-                                              : 'border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] focus:border-[#004ad7]'
-                                          }`}
-                                        />
-                                        {isHeightInvalid && (
-                                          <p className="text-[9px] text-red-500 dark:text-red-400 mt-1 leading-tight font-medium">
-                                            {lang === 'ar' ? 'الطول للبالغين: 120 إلى 220 سم (3 أرقام)' : 'Adult height: 120 - 220 cm'}
-                                          </p>
-                                        )}
-                                      </div>
-
-                                      <div>
-                                        <label className="text-[10px] text-[#6b7280] dark:text-[#9ca3af] block mb-1">
-                                          {lang === 'ar' ? 'الوزن (30 - 200 كغم)' : 'Weight (30 - 200 kg)'}
-                                        </label>
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          maxLength={3}
-                                          placeholder={lang === 'ar' ? 'مثال: 72' : 'e.g. 72'}
-                                          value={calcWeight}
-                                          onChange={(e) => {
-                                            const val = e.target.value.replace(/\D/g, '').slice(0, 3);
-                                            setCalcWeight(val);
-                                          }}
-                                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs text-[#15171c] dark:text-white outline-none transition-colors ${
-                                            isWeightInvalid
-                                              ? 'border-red-500 bg-red-500/10 dark:bg-red-500/15'
-                                              : 'border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] focus:border-[#004ad7]'
-                                          }`}
-                                        />
-                                        {isWeightInvalid && (
-                                          <p className="text-[9px] text-red-500 dark:text-red-400 mt-1 leading-tight font-medium">
-                                            {lang === 'ar' ? 'الوزن للبالغين: 30 إلى 200 كغم' : 'Adult weight: 30 - 200 kg'}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Live Dynamic Recommendation Result */}
-                                    {dynamicRecommendation && (
-                                      <motion.div
-                                        initial={{ opacity: 0, y: 4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className={`mt-3 pt-2.5 border-t flex flex-col gap-2 rounded-xl p-2.5 ${
-                                          dynamicRecommendation.isBespoke
-                                            ? 'border-amber-500/30 bg-amber-500/[0.08] dark:bg-amber-500/[0.1]'
-                                            : 'border-[#004ad7]/15 dark:border-[#3b82f6]/20 bg-[#004ad7]/[0.03] dark:bg-[#3b82f6]/[0.05]'
-                                        }`}
-                                      >
-                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-[11px] text-[#15171c] dark:text-white">
-                                              {lang === 'ar' ? 'المقاس المقترح:' : 'Recommended Fit:'}
-                                            </span>
-                                            <span
-                                              className={`rounded-md px-2 py-0.5 text-xs font-bold text-white shadow-2xs ${
-                                                dynamicRecommendation.isBespoke
-                                                  ? 'bg-amber-600 dark:bg-amber-500'
-                                                  : 'bg-[#004ad7] dark:bg-[#3b82f6]'
-                                              }`}
-                                            >
-                                              {dynamicRecommendation.displaySize}
-                                            </span>
-                                            {dynamicRecommendation.reason_ar && (
-                                              <span
-                                                className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                                                  dynamicRecommendation.isBespoke
-                                                    ? 'text-amber-700 dark:text-amber-400 bg-amber-500/15'
-                                                    : 'text-[#004ad7] dark:text-[#3b82f6] bg-[#004ad7]/10 dark:bg-[#3b82f6]/20'
-                                                }`}
-                                              >
-                                                {lang === 'ar' ? dynamicRecommendation.reason_ar : dynamicRecommendation.reason_en}
-                                              </span>
-                                            )}
-                                          </div>
-
-                                          {dynamicRecommendation.isBespoke ? (
-                                            bespokeControl.visible ? (
-                                              <a
-                                                href={bespokeWhatsappUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="rounded-lg bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs active:scale-95 cursor-pointer text-center"
-                                              >
-                                                {lang === 'ar' ? bespokeControl.label_ar : bespokeControl.label_en}
-                                              </a>
-                                            ) : null
-                                          ) : dynamicRecommendation.size ? (
-                                            <button
-                                              type="button"
-                                              onClick={() => handleSizeClick(dynamicRecommendation.size!)}
-                                              className="rounded-lg bg-[#004ad7] dark:bg-[#3b82f6] px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:opacity-95 active:scale-95 cursor-pointer"
-                                            >
-                                              {lang === 'ar'
-                                                ? `اعتماد مقاس (${dynamicRecommendation.displaySize})`
-                                                : `Select (${dynamicRecommendation.displaySize})`}
-                                            </button>
-                                          ) : null}
-                                        </div>
-
-                                        <p className="text-[10px] text-[#6b7280] dark:text-[#9ca3af] leading-relaxed">
-                                          {lang === 'ar' ? dynamicRecommendation.note_ar : dynamicRecommendation.note_en}
-                                        </p>
-                                      </motion.div>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-
-                            {/* 2. Comprehensive Sizing Matrix Table */}
-                            <div className="overflow-x-auto mt-3">
-                              <table className="w-full text-center text-xs">
-                                <thead>
-                                  <tr className="text-[#6b7280] dark:text-[#9ca3af] border-b border-black/5 dark:border-white/5">
-                                    <th className="py-1.5 px-2 font-semibold">{lang === 'ar' ? 'المقاس' : 'Size'}</th>
-                                    <th className="py-1.5 px-2 font-semibold">{lang === 'ar' ? 'الطول المقترح (سم)' : 'Height (cm)'}</th>
-                                    <th className="py-1.5 px-2 font-semibold">{lang === 'ar' ? 'الوزن المقترح (كغم)' : 'Weight (kg)'}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {SIZE_GUIDE_DATA.map((row) => {
-                                    const isRowSelected = selectedSize === row.size;
-                                    const isCalcMatch = dynamicRecommendation?.size === row.size;
-                                    return (
-                                      <tr
-                                        key={row.size}
-                                        className={`border-b border-black/5 dark:border-white/5 transition-colors ${
-                                          isRowSelected || isCalcMatch
-                                            ? 'bg-[#004ad7]/10 dark:bg-[#3b82f6]/15 font-semibold text-[#004ad7] dark:text-[#3b82f6]'
-                                            : 'text-[#15171c] dark:text-white/90'
-                                        }`}
-                                      >
-                                        <td className="py-1.5 px-2 font-bold">{row.size}</td>
-                                        <td className="py-1.5 px-2 tabular-nums">{row.height}</td>
-                                        <td className="py-1.5 px-2 tabular-nums">{row.weight}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                            <p className="mt-2 text-[10px] text-[#6b7280] dark:text-[#9ca3af] leading-tight">
-                              {lang === 'ar'
-                                ? '• القياسات ديناميكية وقابلة للتعديل وتناسب القصة العصرية المريحة.'
-                                : '• Sizing data is dynamic and tailored for contemporary relaxed luxury.'}
-                            </p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      <ul className="mt-3.5 flex flex-wrap gap-2.5">
-                        {ALL_SIZES.map((size) => {
-                          const isAvailable = availableSizes.has(size);
+                      {/* Size Selection Grid */}
+                      <ul className="flex flex-wrap gap-2 md:gap-2.5 lg:gap-3">
+                        {renderedSizes.map((size) => {
+                          const isAvailable = availableSizes.has(size.toUpperCase());
                           const isSelected = selectedSize === size;
 
                           return (
@@ -1252,14 +1072,14 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
                               <button
                                 type="button"
                                 onClick={() => handleSizeClick(size)}
-                                className={`flex h-11 min-w-12 items-center justify-center rounded-xl border text-sm font-semibold transition-all active:scale-95 cursor-pointer ${
+                                className={`flex h-10 min-w-[48px] px-3.5 md:h-13.5 md:min-w-[60px] lg:h-14 lg:min-w-[66px] md:px-5 lg:px-6 items-center justify-center rounded-xl md:rounded-2xl border text-xs sm:text-sm md:text-[15px] lg:text-base font-bold transition-all active:scale-95 cursor-pointer ${
                                   isSelected
-                                    ? 'border-[#004ad7] bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/30 dark:border-[#3b82f6] dark:bg-[#3b82f6]'
+                                    ? 'border-[#004ad7] bg-[#004ad7] text-white shadow-md shadow-[#004ad7]/25 ring-2 ring-[#004ad7]/30 dark:border-[#3b82f6] dark:bg-[#3b82f6]'
                                     : isAvailable
-                                    ? 'border-black/15 dark:border-white/20 bg-white dark:bg-[#20242c] text-[#15171c] dark:text-white hover:border-[#004ad7] dark:hover:border-[#3b82f6]'
-                                    : 'border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] text-black/35 dark:text-white/30 line-through hover:border-black/25 dark:hover:border-white/25'
+                                    ? 'border-black/12 dark:border-white/15 bg-white dark:bg-[#20242c] text-[#15171c] dark:text-white hover:border-[#004ad7] dark:hover:border-[#3b82f6]'
+                                    : 'border-black/8 dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] text-black/30 dark:text-white/25 line-through hover:border-black/20'
                                 }`}
-                                aria-label={`${size} ${isAvailable ? 'available' : isSoldOut ? 'sold out - tap to request restock' : 'out of stock'}`}
+                                aria-label={`${size} ${isAvailable ? 'available' : isSoldOut ? 'sold out' : 'out of stock'}`}
                               >
                                 {size}
                               </button>
@@ -1268,101 +1088,297 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
                         })}
                       </ul>
 
-                      {/* Size selection feedback banner - cohesive cobalt blue palette */}
+                      {/* Size selection feedback banner */}
                       {sizeFeedback && (
                         <div
-                          className={`mt-3 flex items-center gap-2 rounded-xl p-2.5 text-xs transition-colors ${
+                          className={`flex items-center gap-2 rounded-xl p-2.5 md:p-3 text-xs md:text-sm transition-colors ${
                             selectedSize && availableSizes.has(selectedSize)
                               ? 'bg-[#004ad7]/8 dark:bg-[#3b82f6]/15 text-[#004ad7] dark:text-[#3b82f6] border border-[#004ad7]/20 dark:border-[#3b82f6]/30'
-                              : 'bg-[#004ad7]/6 dark:bg-[#3b82f6]/10 text-[#004ad7] dark:text-[#3b82f6] border border-[#004ad7]/15 dark:border-[#3b82f6]/25'
+                              : 'bg-black/[0.03] dark:bg-white/[0.05] text-[#15171c] dark:text-white/85 border border-black/5 dark:border-white/10'
                           }`}
                         >
                           {selectedSize && availableSizes.has(selectedSize) ? (
-                            <Check className="h-4 w-4 shrink-0 text-[#004ad7] dark:text-[#3b82f6]" />
+                            <Check className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 text-[#004ad7] dark:text-[#3b82f6]" />
                           ) : (
-                            <AlertCircle className="h-4 w-4 shrink-0 text-[#004ad7] dark:text-[#3b82f6]" />
+                            <AlertCircle className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0 text-[#004ad7] dark:text-[#3b82f6]" />
                           )}
                           <span className="font-medium">{sizeFeedback}</span>
                         </div>
                       )}
+
+                      {/* Tabbed Expandable Size Guide (Calculators & Tables) */}
+                      <AnimatePresence>
+                        {showSizeGuide && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.22, ease: 'easeInOut' }}
+                            className="overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-[#1e222a] p-3.5 sm:p-4 shadow-sm space-y-3"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/10">
+                              {/* 2 Clean Tabs */}
+                              <div className="flex items-center gap-1.5 bg-black/[0.04] dark:bg-white/[0.05] p-1 rounded-xl">
+                                <button
+                                  type="button"
+                                  onClick={() => setSizeGuideTab('calculator')}
+                                  className={`rounded-lg px-2.5 py-1 md:px-4 md:py-2 text-[11px] md:text-xs font-bold transition-all cursor-pointer ${
+                                    sizeGuideTab === 'calculator'
+                                      ? 'bg-white dark:bg-[#14171f] text-[#004ad7] dark:text-[#60a5fa] shadow-2xs'
+                                      : 'text-[#6b7280] dark:text-[#9ca3af] hover:text-black dark:hover:text-white'
+                                  }`}
+                                >
+                                  {lang === 'ar' ? 'حاسبة المقاس' : 'Fit Calculator'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSizeGuideTab('table')}
+                                  className={`rounded-lg px-2.5 py-1 md:px-4 md:py-2 text-[11px] md:text-xs font-bold transition-all cursor-pointer ${
+                                    sizeGuideTab === 'table'
+                                      ? 'bg-white dark:bg-[#14171f] text-[#004ad7] dark:text-[#60a5fa] shadow-2xs'
+                                      : 'text-[#6b7280] dark:text-[#9ca3af] hover:text-black dark:hover:text-white'
+                                  }`}
+                                >
+                                  {lang === 'ar' ? 'جدول المقاسات' : 'Size Table'}
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => setShowSizeGuide(false)}
+                                className="text-[#6b7280] dark:text-[#9ca3af] hover:text-black dark:hover:text-white cursor-pointer p-1.5 md:p-2 rounded-lg"
+                                aria-label={lang === 'ar' ? 'إغلاق الدليل' : 'Close guide'}
+                              >
+                                <X className="h-4 w-4 md:h-4.5 md:w-4.5" />
+                              </button>
+                            </div>
+
+                            {/* TAB 1: Smart Fit Recommender */}
+                            {sizeGuideTab === 'calculator' && (
+                              <div className="space-y-3">
+                                <span className="text-[11px] md:text-xs font-medium text-[#6b7280] dark:text-[#9ca3af] block">
+                                  {lang === 'ar'
+                                    ? 'أدخل طولك ووزنك لاقتراح المقاس المثالي فوراً:'
+                                    : 'Enter your height and weight for an instant fit recommendation:'}
+                                </span>
+
+                                <div className="grid grid-cols-2 gap-2.5 md:gap-3.5">
+                                  <div>
+                                    <label className="text-[10px] md:text-xs text-[#6b7280] dark:text-[#9ca3af] block mb-1">
+                                      {lang === 'ar' ? 'الطول (120 - 220 سم)' : 'Height (120 - 220 cm)'}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      maxLength={3}
+                                      placeholder={lang === 'ar' ? 'مثال: 175' : 'e.g. 175'}
+                                      value={calcHeight}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                        setCalcHeight(val);
+                                      }}
+                                      className="w-full rounded-lg md:rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] px-2.5 py-1.5 md:py-2.5 md:px-3 text-xs md:text-sm text-[#15171c] dark:text-white outline-none focus:border-[#004ad7]"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] md:text-xs text-[#6b7280] dark:text-[#9ca3af] block mb-1">
+                                      {lang === 'ar' ? 'الوزن (30 - 200 كغم)' : 'Weight (30 - 200 kg)'}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      maxLength={3}
+                                      placeholder={lang === 'ar' ? 'مثال: 72' : 'e.g. 72'}
+                                      value={calcWeight}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                        setCalcWeight(val);
+                                      }}
+                                      className="w-full rounded-lg md:rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] px-2.5 py-1.5 md:py-2.5 md:px-3 text-xs md:text-sm text-[#15171c] dark:text-white outline-none focus:border-[#004ad7]"
+                                    />
+                                  </div>
+                                </div>
+
+                                {dynamicRecommendation && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 3 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`rounded-xl md:rounded-2xl p-3 md:p-3.5 border flex flex-col gap-2 ${
+                                      dynamicRecommendation.isBespoke
+                                        ? 'border-amber-500/30 bg-amber-500/[0.08] dark:bg-amber-500/[0.1]'
+                                        : 'border-[#004ad7]/20 bg-[#004ad7]/[0.05] dark:bg-[#3b82f6]/[0.08]'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs md:text-sm text-[#15171c] dark:text-white font-medium">
+                                          {lang === 'ar' ? 'المقاس المقترح:' : 'Recommended Fit:'}
+                                        </span>
+                                        <span
+                                          className={`rounded-md md:rounded-lg px-2 py-0.5 md:px-2.5 md:py-1 text-xs md:text-sm font-bold text-white shadow-2xs ${
+                                            dynamicRecommendation.isBespoke
+                                              ? 'bg-amber-600 dark:bg-amber-500'
+                                              : 'bg-[#004ad7] dark:bg-[#3b82f6]'
+                                          }`}
+                                        >
+                                          {dynamicRecommendation.displaySize}
+                                        </span>
+                                      </div>
+
+                                      {dynamicRecommendation.isBespoke ? (
+                                        bespokeControl.visible ? (
+                                          <a
+                                            href={bespokeWhatsappUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="rounded-lg md:rounded-xl bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 px-2.5 py-1 md:px-3.5 md:py-1.5 text-[11px] md:text-xs font-semibold text-white shadow-2xs cursor-pointer"
+                                          >
+                                            {lang === 'ar' ? bespokeControl.label_ar : bespokeControl.label_en}
+                                          </a>
+                                        ) : null
+                                      ) : dynamicRecommendation.size ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSizeClick(dynamicRecommendation.size!)}
+                                          className="rounded-lg md:rounded-xl bg-[#004ad7] dark:bg-[#3b82f6] px-2.5 py-1 md:px-3.5 md:py-1.5 text-[11px] md:text-xs font-semibold text-white shadow-2xs cursor-pointer active:scale-95"
+                                        >
+                                          {lang === 'ar'
+                                            ? `اختيار مقاس (${dynamicRecommendation.displaySize})`
+                                            : `Select (${dynamicRecommendation.displaySize})`}
+                                        </button>
+                                      ) : null}
+                                    </div>
+
+                                    <p className="text-[10px] md:text-xs text-[#6b7280] dark:text-[#9ca3af] leading-relaxed">
+                                      {lang === 'ar' ? dynamicRecommendation.note_ar : dynamicRecommendation.note_en}
+                                    </p>
+                                  </motion.div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* TAB 2: Measurements Table (Only Height & Weight) */}
+                            {sizeGuideTab === 'table' && (
+                              <div className="space-y-2.5">
+                                <div className="rounded-xl sm:rounded-2xl border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-black/30 overflow-hidden">
+                                  <table className="w-full text-center text-xs md:text-sm">
+                                    <thead>
+                                      <tr className="text-[#6b7280] dark:text-[#9ca3af] border-b border-black/8 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04]">
+                                        <th className="py-2.5 px-3 md:py-3 md:px-4 font-bold text-start w-[30%]">{lang === 'ar' ? 'المقاس' : 'Size'}</th>
+                                        <th className="py-2.5 px-3 md:py-3 md:px-4 font-bold w-[35%]">{lang === 'ar' ? 'الطول' : 'Height'}</th>
+                                        <th className="py-2.5 px-3 md:py-3 md:px-4 font-bold w-[35%]">{lang === 'ar' ? 'الوزن' : 'Weight'}</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-black/5 dark:divide-white/5 text-xs md:text-sm">
+                                      {masterSizes.filter((r) => r.enabled).map((row) => {
+                                        const isRowSelected = selectedSize === row.size;
+                                        return (
+                                          <tr
+                                            key={row.id || row.size}
+                                            onClick={() => handleSizeClick(row.size)}
+                                            className={`transition-colors cursor-pointer ${
+                                              isRowSelected
+                                                ? 'bg-[#004ad7]/12 dark:bg-[#3b82f6]/20 font-bold text-[#004ad7] dark:text-[#3b82f6]'
+                                                : 'text-[#15171c] dark:text-white/90 hover:bg-black/5 dark:hover:bg-white/5'
+                                            }`}
+                                            title={lang === 'ar' ? `انقر لاختيار مقاس (${row.size})` : `Click to select (${row.size})`}
+                                          >
+                                            <td className="py-2.5 px-3 md:py-3 md:px-4 font-bold text-start font-sans">
+                                              <span className="inline-flex items-center gap-2">
+                                                <span className={`h-2 w-2 rounded-full transition-transform ${isRowSelected ? 'bg-[#004ad7] dark:bg-[#3b82f6] scale-125' : 'bg-black/20 dark:bg-white/20'}`} />
+                                                <span className="px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-xs md:text-sm font-bold">{row.size}</span>
+                                              </span>
+                                            </td>
+                                            <td className="py-2.5 px-3 md:py-3 md:px-4 tabular-nums font-medium text-zinc-700 dark:text-zinc-200">{row.height || '—'}</td>
+                                            <td className="py-2.5 px-3 md:py-3 md:px-4 tabular-nums font-medium text-zinc-700 dark:text-zinc-200">{row.weight || '—'}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <p className="text-[10.5px] md:text-xs text-[#6b7280] dark:text-[#9ca3af] text-center">
+                                  {lang === 'ar' ? 'انقر على أي مقاس لاعتماده فوراً للقطعة' : 'Tap any size row to select it instantly'}
+                                </p>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                    {/* Garment Specifications Accordion/List */}
-                    <div className="mt-6 border-t border-black/8 dark:border-white/10 pt-4 text-xs space-y-2 text-[#6b7280] dark:text-[#9ca3af]">
-                      <div className="flex justify-between py-1">
-                        <span>{lang === 'ar' ? 'الخامة والتصنيع' : 'Material & Craft'}</span>
-                        <span className="font-medium text-[#15171c] dark:text-white">
-                          {lang === 'ar' ? 'حرفية يدوية فائقة' : 'Handcrafted Luxury'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span>{lang === 'ar' ? 'طريقة العرض' : 'Presentation'}</span>
-                        <span className="font-medium text-[#15171c] dark:text-white">
-                          {lang === 'ar' ? 'كتالوج لوك بوك حصري' : 'Exclusive Lookbook Piece'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                    <div className="h-px w-full bg-black/5 dark:bg-white/5" />
 
-                    {/* Nationwide Express Delivery Banner (3-5 days across all governorates) */}
-                    <div className="mt-6 flex items-center gap-2.5 rounded-2xl border border-black/8 dark:border-white/10 bg-black/[0.025] dark:bg-white/[0.04] p-3 text-xs text-[#15171c] dark:text-[#f3f4f6]">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#004ad7]/10 dark:bg-[#3b82f6]/20 text-[#004ad7] dark:text-[#3b82f6]">
-                        <Truck className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1 leading-snug">
-                        <span className="font-semibold block text-[12px]">
-                          {lang === 'ar' ? 'مدة التوصيل: 3 ~ 5 أيام لكافة المحافظات' : 'Delivery: 3 ~ 5 Days to All Governorates'}
-                        </span>
-                        <span className="text-[11px] text-[#6b7280] dark:text-[#9ca3af]">
-                          {lang === 'ar'
-                            ? 'شحن مضمون ومباشر لكافة محافظات العراق مع حق المعاينة والفحص عند الاستلام.'
-                            : 'Insured direct dispatch to all Iraqi governorates with preview inspection upon arrival.'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Primary CTA / WhatsApp Inquire & Order Button (Controlled via SiteControls) */}
-                    {whatsappControl.visible && (
-                      <div className="mt-4 pt-2">
-                        <a
-                          href={whatsappUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => {
-                            if (product) {
-                              trackEvent('whatsapp_order', {
-                                productId: product.id,
-                                title: displayTitle,
-                                size: selectedSize,
-                                isBespoke: false,
-                              });
-                            }
-                          }}
-                          className="group relative flex h-12 w-full items-center justify-center gap-2.5 rounded-full bg-[#004ad7] hover:bg-[#003db3] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb] text-white text-sm font-semibold tracking-wide transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(0,74,215,0.28)] dark:shadow-[0_4px_24px_rgba(59,130,246,0.35)] cursor-pointer"
-                        >
-                          <MessageCircle className="h-4.5 w-4.5 fill-white/20 stroke-white stroke-[2]" />
-                          <span>
-                            {selectedSize
-                              ? `${lang === 'ar' ? whatsappControl.label_ar : whatsappControl.label_en} (${selectedSize})`
-                              : buttonLabel || (lang === 'ar' ? whatsappControl.label_ar : whatsappControl.label_en)}
+                    {/* 6. Cohesive Micro Highlights Grid (Delivery & Craftsmanship) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 text-xs md:text-sm">
+                      <div className="flex items-start gap-2.5 md:gap-3 rounded-xl md:rounded-2xl border border-black/6 dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.03] p-2.5 md:p-3.5 lg:p-4">
+                        <Truck className="h-4 w-4 md:h-5 md:w-5 shrink-0 text-[#004ad7] dark:text-[#3b82f6] mt-0.5" />
+                        <div>
+                          <span className="font-bold text-[11px] md:text-xs lg:text-[13px] text-[#15171c] dark:text-white block">
+                            {lang === 'ar' ? 'توصيل سريع لكافة المحافظات' : 'Nationwide Fast Delivery'}
                           </span>
-                        </a>
+                          <span className="text-[10px] md:text-[11px] lg:text-xs text-[#6b7280] dark:text-[#9ca3af] leading-normal block mt-0.5">
+                            {lang === 'ar' ? 'خلال 3 - 5 أيام مع حق الفحص والمعاينة عند الاستلام' : 'Within 3 - 5 days with inspection upon arrival'}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            </div>
 
-          {/* Share Modal Dialog */}
-          <ShareModal
-            isOpen={showShareModal}
-            onClose={() => setShowShareModal(false)}
-            product={product}
-            lang={lang}
-          />
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
+                      <div className="flex items-start gap-2.5 md:gap-3 rounded-xl md:rounded-2xl border border-black/6 dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.03] p-2.5 md:p-3.5 lg:p-4">
+                        <Sparkles className="h-4 w-4 md:h-5 md:w-5 shrink-0 text-[#004ad7] dark:text-[#3b82f6] mt-0.5" />
+                        <div>
+                          <span className="font-bold text-[11px] md:text-xs lg:text-[13px] text-[#15171c] dark:text-white block">
+                            {lang === 'ar' ? 'تفصيل فاخر وقصة إيطالية' : 'Luxury Italian Tailoring'}
+                          </span>
+                          <span className="text-[10px] md:text-[11px] lg:text-xs text-[#6b7280] dark:text-[#9ca3af] leading-normal block mt-0.5">
+                            {lang === 'ar' ? 'حرفية يدوية بإتقان مع ضمان أصالة المظهر' : 'Handcrafted precision & authentic lookbook drop'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 7. BOTTOM ORDER ACTION (WhatsApp Primary Button) */}
+                  {whatsappControl.visible && (
+                    <div className="pt-3 sm:pt-4 md:pt-5 mt-2 sm:mt-3 md:mt-4 pb-[env(safe-area-inset-bottom)]">
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          if (product) {
+                            trackEvent('whatsapp_order', {
+                              productId: product.id,
+                              title: displayTitle,
+                              size: selectedSize,
+                              isBespoke: false,
+                            });
+                          }
+                        }}
+                        className="group relative flex h-12 md:h-14.5 lg:h-15.5 w-full items-center justify-center gap-2.5 md:gap-3 rounded-2xl md:rounded-[22px] bg-[#004ad7] hover:bg-[#003db3] dark:bg-[#3b82f6] dark:hover:bg-[#2563eb] text-white text-sm md:text-base lg:text-lg font-bold tracking-wide transition-all active:scale-[0.98] shadow-md md:shadow-xl shadow-[#004ad7]/25 dark:shadow-[#3b82f6]/30 cursor-pointer"
+                      >
+                        <MessageCircle className="h-4.5 w-4.5 md:h-5.5 md:w-5.5 lg:h-6 lg:w-6 fill-white/20 stroke-white stroke-[2]" />
+                        <span>
+                          {selectedSize
+                            ? `${lang === 'ar' ? whatsappControl.label_ar : whatsappControl.label_en} (${selectedSize})`
+                            : buttonLabel || (lang === 'ar' ? whatsappControl.label_ar : whatsappControl.label_en)}
+                        </span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Share Modal Dialog */}
+            <ShareModal
+              isOpen={showShareModal}
+              onClose={() => setShowShareModal(false)}
+              product={product}
+              lang={lang}
+            />
+          </div>
+        )}
+      </AnimatePresence>
+    );
+  }

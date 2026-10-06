@@ -32,9 +32,6 @@ export default function SkeletonCard({
           </svg>
         </div>
 
-        {/* Top Floating Badge Skeleton Pill */}
-        <div className="absolute top-2.5 ltr:left-2.5 rtl:right-2.5 z-10 h-5 w-16 rounded-full bg-neutral-300/80 dark:bg-white/10 border border-black/5 dark:border-white/10" />
-
         {/* Wishlist Circle Button Skeleton */}
         <div className="absolute top-2.5 ltr:right-2.5 rtl:left-2.5 z-10 h-7 w-7 rounded-full bg-neutral-300/80 dark:bg-white/10 border border-black/5 dark:border-white/10" />
 

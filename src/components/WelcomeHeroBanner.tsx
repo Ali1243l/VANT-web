@@ -11,6 +11,7 @@ interface Props {
   onSelectCategory?: (category: string) => void;
   backgroundImageUrl?: string;
   isOpen: boolean;
+  activeCategory?: string;
 }
 
 interface TrendItem {
@@ -99,6 +100,7 @@ export default function WelcomeHeroBanner({
   onSelectCategory,
   backgroundImageUrl = DEFAULT_BANNER_BG,
   isOpen,
+  activeCategory,
 }: Props) {
   const isAr = lang === 'ar';
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -112,6 +114,8 @@ export default function WelcomeHeroBanner({
   const heroBgControl = getControl('banner_hero_bg');
   const trendsTitleControl = getControl('banner_trends_title');
   const { trendItems } = useSiteControls();
+
+  const isAllCategory = !activeCategory || activeCategory === 'All' || activeCategory === 'الكل';
 
   const bgImage = heroBgControl.actionValue || backgroundImageUrl;
   const activeTrendsList = trendItems && trendItems.length > 0 ? trendItems : FEATURED_TRENDS;
@@ -146,39 +150,36 @@ export default function WelcomeHeroBanner({
       {isOpen && (
         <motion.section
           key="welcome-hero-banner"
-          initial={{ opacity: 0, height: 0, y: -10 }}
-          animate={{ opacity: 1, height: 'auto', y: 0 }}
-          exit={{ opacity: 0, height: 0, y: -10 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="overflow-hidden mx-auto max-w-7xl px-2.5 sm:px-6 mb-4 sm:mb-6"
+          initial={{ opacity: 0, height: 0, y: -12, marginBottom: 0 }}
+          animate={{ opacity: 1, height: 'auto', y: 0, marginBottom: 24 }}
+          exit={{ opacity: 0, height: 0, y: -12, marginBottom: 0 }}
+          transition={{
+            height: { duration: 0.38, ease: [0.32, 0.72, 0, 1] },
+            marginBottom: { duration: 0.38, ease: [0.32, 0.72, 0, 1] },
+            opacity: { duration: 0.25, ease: 'easeInOut' },
+            y: { duration: 0.28, ease: 'easeOut' },
+          }}
+          className="overflow-hidden w-full"
           aria-label={isAr ? 'أصل التشكيلة وتريند الموسم' : 'Collection Foundation & Featured Trends'}
         >
           {/* Card 1: Top Hero Welcome Banner with Editorial Background Image Layer */}
-          <div className="relative overflow-hidden rounded-2xl sm:rounded-[28px] border border-black/8 dark:border-white/10 bg-white dark:bg-[#121419] p-4 sm:p-6 md:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-[28px] border border-black/8 dark:border-white/10 bg-white dark:bg-[#090b0f] p-4 sm:p-6 md:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
             
-            {/* Background Image Layer with high clarity, mobile ambient softness, and desktop directional fade */}
+            {/* Background Image Layer: Bright & crystal-clear on the photo side, fading seamlessly into dark/black on the text side */}
             <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
               <img
                 src={bgImage}
                 alt=""
                 className={`h-full w-full object-cover transition-all duration-700 ${
-                  isAr ? 'object-left' : 'object-right'
-                } opacity-20 sm:opacity-95 dark:opacity-15 dark:sm:opacity-90 scale-100 sm:scale-102`}
-                style={{
-                  maskImage: isAr
-                    ? 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.35) 65%, rgba(0,0,0,0) 95%)'
-                    : 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.35) 65%, rgba(0,0,0,0) 95%)',
-                  WebkitMaskImage: isAr
-                    ? 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.35) 65%, rgba(0,0,0,0) 95%)'
-                    : 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.35) 65%, rgba(0,0,0,0) 95%)',
-                }}
+                  isAr ? 'object-left sm:object-left' : 'object-right sm:object-right'
+                } opacity-95 sm:opacity-100 dark:opacity-90 dark:sm:opacity-95 contrast-[1.04] brightness-[1.02] scale-100 sm:scale-102`}
               />
-              {/* Directional gradient overlay matching text side for crystal-clear readability without text/image collision */}
+              {/* Luxury Cinematic Gradient Fade: Solid dark/black behind text side, feathering smoothly to 100% clear & vivid image on photo side */}
               <div
                 className={`absolute inset-0 ${
                   isAr
-                    ? 'bg-gradient-to-l from-white via-white/90 sm:via-white/95 to-white/60 sm:to-transparent dark:from-[#121419] dark:via-[#121419]/90 dark:sm:via-[#121419]/95 dark:to-[#121419]/50 dark:sm:to-transparent'
-                    : 'bg-gradient-to-r from-white via-white/90 sm:via-white/95 to-white/60 sm:to-transparent dark:from-[#121419] dark:via-[#121419]/90 dark:sm:via-[#121419]/95 dark:to-[#121419]/50 dark:sm:to-transparent'
+                    ? 'bg-gradient-to-l from-white via-white/80 via-40% to-transparent to-85% dark:from-[#090b0f] dark:via-[#090b0f]/85 dark:via-40% dark:to-transparent dark:to-85%'
+                    : 'bg-gradient-to-r from-white via-white/80 via-40% to-transparent to-85% dark:from-[#090b0f] dark:via-[#090b0f]/85 dark:via-40% dark:to-transparent dark:to-85%'
                 }`}
               />
             </div>
@@ -202,21 +203,21 @@ export default function WelcomeHeroBanner({
                 <button
                   type="button"
                   onClick={onDismiss}
-                  className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 hover:text-[#15171c] dark:hover:text-white transition-all active:scale-90 cursor-pointer"
+                  className="flex h-6 w-6 sm:h-7 sm:w-7 md:h-9 md:w-9 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 hover:text-[#15171c] dark:hover:text-white transition-all active:scale-90 cursor-pointer"
                   aria-label={isAr ? 'إخفاء المقدمة' : 'Dismiss intro'}
                   title={isAr ? 'إخفاء' : 'Dismiss'}
                 >
-                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-4.5 md:w-4.5" />
                 </button>
               </div>
 
               {/* Editorial Statement & Brand Manifesto */}
               <div className="pt-3 sm:pt-4 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-6">
                 <div className="max-w-2xl">
-                  <h2 className={`text-xl sm:text-2xl md:text-[28px] font-semibold text-[#15171c] dark:text-white leading-snug sm:leading-[1.25] ${isAr ? 'tracking-normal' : 'tracking-tight'}`}>
+                  <h2 className={`text-xl sm:text-2xl md:text-[28px] lg:text-[30px] font-semibold text-[#15171c] dark:text-white leading-snug sm:leading-[1.25] ${isAr ? 'tracking-normal' : 'tracking-tight'}`}>
                     {headlineText}
                   </h2>
-                  <p className="mt-1.5 text-[11px] sm:text-xs md:text-sm text-[#15171c]/80 dark:text-white/80 leading-relaxed max-w-xl">
+                  <p className="mt-1.5 text-[11px] sm:text-xs md:text-sm lg:text-[15px] text-[#15171c]/80 dark:text-white/80 leading-relaxed max-w-xl">
                     {subtitleText}
                   </p>
                 </div>
@@ -226,10 +227,10 @@ export default function WelcomeHeroBanner({
                   <button
                     type="button"
                     onClick={onExplore}
-                    className="group inline-flex items-center gap-2 rounded-full bg-[#15171c] hover:bg-black dark:bg-white dark:hover:bg-white/95 px-4 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-[13px] font-bold text-white dark:text-[#15171c] transition-all active:scale-95 shadow-md hover:shadow-lg dark:shadow-[0_4px_16px_rgba(255,255,255,0.12)] border border-black/10 dark:border-white/20 cursor-pointer"
+                    className="group inline-flex items-center gap-2 rounded-full bg-[#15171c] hover:bg-black dark:bg-white dark:hover:bg-white/95 px-4 py-2 sm:px-5 sm:py-2.5 md:h-11 md:px-6 lg:h-12 lg:px-7 text-xs sm:text-[13px] md:text-sm font-bold text-white dark:text-[#15171c] transition-all active:scale-95 shadow-md hover:shadow-lg dark:shadow-[0_4px_16px_rgba(255,255,255,0.12)] border border-black/10 dark:border-white/20 cursor-pointer"
                   >
                     <span className={isAr ? 'tracking-normal' : 'tracking-wide'}>{btnText}</span>
-                    <ArrowDown className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-y-0.5" />
+                    <ArrowDown className="h-3.5 w-3.5 md:h-4 md:w-4 transition-transform duration-300 group-hover:translate-y-0.5" />
                   </button>
                 </div>
               </div>
@@ -237,9 +238,10 @@ export default function WelcomeHeroBanner({
           </div>
 
           {/* Card 2: Separated, Cleanly Formatted Featured Trends Section */}
-          <div className="mt-2.5 sm:mt-3 rounded-2xl sm:rounded-[26px] border border-black/8 dark:border-white/10 bg-white/95 dark:bg-[#13161c]/95 p-3.5 sm:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-            {/* Trends Section Header with Refined Luxury Styling (CSS Selector 2) */}
-            <div className="flex items-center justify-between mb-3 px-0.5">
+          <div className="pt-2.5 sm:pt-3">
+            <div className="rounded-2xl sm:rounded-[26px] border border-black/8 dark:border-white/10 bg-white/95 dark:bg-[#13161c]/95 p-3.5 sm:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                    {/* Trends Section Header with Refined Luxury Styling (CSS Selector 2) */}
+                    <div className="flex items-center justify-between mb-3 px-0.5">
               <div className="flex items-center gap-2 sm:gap-2.5">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#004ad7]/10 dark:bg-[#3b82f6]/15 text-[#004ad7] dark:text-[#3b82f6] ring-1 ring-[#004ad7]/20 dark:ring-[#3b82f6]/30">
                   <Sparkles className="h-3.5 w-3.5" />
@@ -258,12 +260,12 @@ export default function WelcomeHeroBanner({
                 </span>
               </div>
 
-              {/* Horizontal Scroll Navigation Arrows - Refined Luxury Tactile Buttons (CSS Selector 1) */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Horizontal Scroll Navigation Arrows - Refined Luxury Tactile Buttons (Visible on mobile & tablet) */}
+              <div className="flex items-center gap-1.5 sm:gap-2 lg:hidden">
                 <button
                   type="button"
                   onClick={() => scrollTrends('left')}
-                  className="group flex h-8 w-8 sm:h-8.5 sm:w-8.5 items-center justify-center rounded-full border border-black/10 dark:border-white/15 bg-white/90 dark:bg-[#1a1d24]/90 text-[#15171c] dark:text-white shadow-2xs hover:bg-[#15171c] hover:text-white dark:hover:bg-white dark:hover:text-[#121419] hover:border-[#15171c] dark:hover:border-white active:scale-90 transition-all duration-200 cursor-pointer"
+                  className="group flex h-8 w-8 sm:h-8.5 sm:w-8.5 md:h-9.5 md:w-9.5 items-center justify-center rounded-full border border-black/10 dark:border-white/15 bg-white/90 dark:bg-[#1a1d24]/90 text-[#15171c] dark:text-white shadow-2xs hover:bg-[#15171c] hover:text-white dark:hover:bg-white dark:hover:text-[#121419] hover:border-[#15171c] dark:hover:border-white active:scale-90 transition-all duration-200 cursor-pointer"
                   aria-label={isAr ? 'التمرير لليسار' : 'Scroll left'}
                   title={isAr ? 'السابق' : 'Previous'}
                 >
@@ -272,7 +274,7 @@ export default function WelcomeHeroBanner({
                 <button
                   type="button"
                   onClick={() => scrollTrends('right')}
-                  className="group flex h-8 w-8 sm:h-8.5 sm:w-8.5 items-center justify-center rounded-full border border-black/10 dark:border-white/15 bg-white/90 dark:bg-[#1a1d24]/90 text-[#15171c] dark:text-white shadow-2xs hover:bg-[#15171c] hover:text-white dark:hover:bg-white dark:hover:text-[#121419] hover:border-[#15171c] dark:hover:border-white active:scale-90 transition-all duration-200 cursor-pointer"
+                  className="group flex h-8 w-8 sm:h-8.5 sm:w-8.5 md:h-9.5 md:w-9.5 items-center justify-center rounded-full border border-black/10 dark:border-white/15 bg-white/90 dark:bg-[#1a1d24]/90 text-[#15171c] dark:text-white shadow-2xs hover:bg-[#15171c] hover:text-white dark:hover:bg-white dark:hover:text-[#121419] hover:border-[#15171c] dark:hover:border-white active:scale-90 transition-all duration-200 cursor-pointer"
                   aria-label={isAr ? 'التمرير لليمين' : 'Scroll right'}
                   title={isAr ? 'التالي' : 'Next'}
                 >
@@ -281,10 +283,10 @@ export default function WelcomeHeroBanner({
               </div>
             </div>
 
-            {/* Horizontal Scrollable Strip with Proportioned Mobile & Desktop Cards */}
+            {/* Horizontal Scrollable Strip with Proportioned Mobile & Centered Desktop Cards */}
             <div
               ref={scrollContainerRef}
-              className="flex items-center gap-2.5 sm:gap-3.5 overflow-x-auto no-scrollbar scroll-smooth pb-0.5 pt-0.5 -mx-0.5 px-0.5"
+              className="flex items-center justify-start md:justify-center gap-2.5 sm:gap-3.5 md:gap-4 lg:gap-5 overflow-x-auto no-scrollbar scroll-smooth pb-0.5 pt-0.5 -mx-0.5 px-0.5"
             >
               {(trendItems && trendItems.length > 0 ? trendItems : FEATURED_TRENDS).map((trend) => (
                 <div
@@ -297,7 +299,7 @@ export default function WelcomeHeroBanner({
                       handleTrendClick(trend.category);
                     }
                   }}
-                  className="group relative h-40 w-32 sm:h-52 sm:w-44 shrink-0 cursor-pointer overflow-hidden rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/12 bg-[#121419] transition-all duration-300 hover:border-[#004ad7]/40 dark:hover:border-[#3b82f6]/50 hover:shadow-xl dark:hover:shadow-2xl hover:-translate-y-1 select-none isolate [contain:paint]"
+                  className="group relative h-40 w-32 sm:h-52 sm:w-44 md:h-56 md:w-48 lg:h-60 lg:w-52 shrink-0 cursor-pointer overflow-hidden rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/12 bg-[#121419] transition-all duration-300 hover:border-[#004ad7]/40 dark:hover:border-[#3b82f6]/50 hover:shadow-xl dark:hover:shadow-2xl hover:-translate-y-1 select-none isolate [contain:paint]"
                 >
                   {/* Background Trend Image with smooth scale anchored at bottom so dark area never moves or shrinks */}
                   <img
@@ -335,9 +337,10 @@ export default function WelcomeHeroBanner({
                 </div>
               ))}
             </div>
-          </div>
-        </motion.section>
-      )}
-    </AnimatePresence>
+                  </div>
+                </div>
+              </motion.section>
+            )}
+          </AnimatePresence>
   );
 }

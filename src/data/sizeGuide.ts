@@ -11,10 +11,144 @@ import type { Size } from '../types';
  *   and are respectfully routed to Bespoke Made-to-Measure tailoring.
  */
 
-export interface SizeGuideRow {
-  size: Size;
+export interface MasterSizeItem {
+  id: string;
+  size: string;
   height: string;
   weight: string;
+  chest?: string;
+  waist?: string;
+  shoulder?: string;
+  length?: string;
+  note_ar?: string;
+  note_en?: string;
+  minHeight: number;
+  maxHeight: number;
+  minWeight: number;
+  maxWeight: number;
+  enabled: boolean;
+  order?: number;
+}
+
+export const DEFAULT_MASTER_SIZES: MasterSizeItem[] = [
+  {
+    id: 'size_xs',
+    size: 'XS',
+    height: '150 - 164 سم',
+    weight: '45 - 56 كغم',
+    chest: '88 - 92 سم',
+    waist: '70 - 74 سم',
+    shoulder: '42 سم',
+    length: '68 سم',
+    note_ar: 'قصة انسيابية مريحة ومضبوطة للقامة الناعمة',
+    note_en: 'Refined tailored silhouette for petite frames',
+    minHeight: 150,
+    maxHeight: 164,
+    minWeight: 45,
+    maxWeight: 56,
+    enabled: true,
+    order: 1,
+  },
+  {
+    id: 'size_s',
+    size: 'S',
+    height: '165 - 172 سم',
+    weight: '57 - 65 كغم',
+    chest: '93 - 97 سم',
+    waist: '75 - 79 سم',
+    shoulder: '44 سم',
+    length: '70 سم',
+    note_ar: 'قصة عصرية متناسقة ومريحة على الأكتاف',
+    note_en: 'Contemporary regular cut with balanced shoulders',
+    minHeight: 165,
+    maxHeight: 172,
+    minWeight: 57,
+    maxWeight: 65,
+    enabled: true,
+    order: 2,
+  },
+  {
+    id: 'size_m',
+    size: 'M',
+    height: '173 - 178 سم',
+    weight: '66 - 75 كغم',
+    chest: '98 - 103 سم',
+    waist: '80 - 85 سم',
+    shoulder: '46 سم',
+    length: '72 سم',
+    note_ar: 'المقاس الأكثر توازناً، يمنحك مظهراً راقياً ومريحاً',
+    note_en: 'Most balanced fit, delivering effortless luxury styling',
+    minHeight: 173,
+    maxHeight: 178,
+    minWeight: 66,
+    maxWeight: 75,
+    enabled: true,
+    order: 3,
+  },
+  {
+    id: 'size_l',
+    size: 'L',
+    height: '179 - 184 سم',
+    weight: '76 - 85 كغم',
+    chest: '104 - 109 سم',
+    waist: '86 - 91 سم',
+    shoulder: '48 سم',
+    length: '74 سم',
+    note_ar: 'قصة فاخرة واسعة بلمسة عصرية راقية',
+    note_en: 'Relaxed modern drape with premium ease of motion',
+    minHeight: 179,
+    maxHeight: 184,
+    minWeight: 76,
+    maxWeight: 85,
+    enabled: true,
+    order: 4,
+  },
+  {
+    id: 'size_xl',
+    size: 'XL',
+    height: '185 - 190 سم',
+    weight: '86 - 95 كغم',
+    chest: '110 - 116 سم',
+    waist: '92 - 98 سم',
+    shoulder: '50 سم',
+    length: '76 سم',
+    note_ar: 'قصة واسعة مريحة تمنحك إطلالة فخمة وحرية حركة',
+    note_en: 'Generous silhouette offering commanding presence',
+    minHeight: 185,
+    maxHeight: 190,
+    minWeight: 86,
+    maxWeight: 95,
+    enabled: true,
+    order: 5,
+  },
+  {
+    id: 'size_xxl',
+    size: 'XXL',
+    height: '191 - 205 سم',
+    weight: '96 - 118 كغم',
+    chest: '117 - 126 سم',
+    waist: '99 - 108 سم',
+    shoulder: '52 سم',
+    length: '78 سم',
+    note_ar: 'قصة رحبة جداً للأطوال والأوزان العالية',
+    note_en: 'Extra spacious cut engineered for taller & heavier builds',
+    minHeight: 191,
+    maxHeight: 205,
+    minWeight: 96,
+    maxWeight: 118,
+    enabled: true,
+    order: 6,
+  },
+];
+
+export interface SizeGuideRow {
+  size: Size | string;
+  height: string;
+  weight: string;
+  chest?: string;
+  waist?: string;
+  shoulder?: string;
+  length?: string;
 }
 
 export interface SizeFitRule {
@@ -138,7 +272,8 @@ export interface SizeRecommendationResult {
  */
 export function calculateRecommendedSize(
   heightCm: number,
-  weightKg: number
+  weightKg: number,
+  customMasterSizes?: MasterSizeItem[]
 ): SizeRecommendationResult | null {
   // Strict boundary check:
   // Height: strictly 3 digits (120 to 220)
@@ -150,10 +285,18 @@ export function calculateRecommendedSize(
   const heightM = heightCm / 100;
   const bmi = weightKg / (heightM * heightM);
 
+  const activeSizes = (customMasterSizes && customMasterSizes.length > 0)
+    ? customMasterSizes.filter((s) => s.enabled)
+    : DEFAULT_MASTER_SIZES;
+
+  const maxSupportedWeight = activeSizes.length > 0
+    ? Math.max(...activeSizes.map((s) => s.maxWeight))
+    : 118;
+
   // 1. HONEST BESPOKE TAILORING ASSESSMENT:
-  // Off-the-rack luxury collections (XS - XXL) physically cannot accommodate weights > 118 kg
+  // Off-the-rack luxury collections physically cannot accommodate weights exceeding max supported
   // or extreme disproportion (BMI >= 40, such as 150 cm with 150 kg where BMI is 66.7).
-  if (weightKg > 118 || bmi >= 40 || heightCm > 210) {
+  if (weightKg > maxSupportedWeight || bmi >= 40 || heightCm > 215) {
     return {
       status: 'bespoke_needed',
       displaySize: 'تفصيل خاص',
@@ -163,92 +306,84 @@ export function calculateRecommendedSize(
       title_en: 'Out of Ready-to-Wear Range',
       reason_ar: 'يتطلب تفصيلاً خاصاً (Bespoke)',
       reason_en: 'Requires Bespoke Tailoring',
-      note_ar: weightKg > 118
-        ? 'المقاسات الجاهزة المتوفرة (من XS إلى XXL) مخصصة حتى وزن 118 كغم، ولن توفر الراحة أو الاتساع المطلوب لهذا القياس. ڤانت ترحب بطلب تفصيل قطعة خاصة لك بمقاساتك الدقيقة عبر خدمة التفصيل الخاص.'
+      note_ar: weightKg > maxSupportedWeight
+        ? `المقاسات الجاهزة المتوفرة مخصصة حتى وزن ${maxSupportedWeight} كغم، ولن توفر الراحة أو الاتساع المطلوب لهذا القياس. ڤانت ترحب بطلب تفصيل قطعة خاصة لك بمقاساتك الدقيقة عبر خدمة التفصيل الخاص.`
         : 'نظراً لاختلاف تناسق الطول والوزن عن قوالب المقاسات الجاهزة، المقاسات الجاهزة ستكون غير متناسقة في طول الأكمام والكتفين. نوصي بالتفصيل الخاص لضمان قصة مثالية ومريحة.',
-      note_en: weightKg > 118
-        ? 'Current ready-to-wear sizes (XS–XXL) are tailored up to 118 kg and cannot accommodate this profile comfortably. Maison VANT welcomes bespoke Made-to-Measure orders tailored to your exact measurements.'
+      note_en: weightKg > maxSupportedWeight
+        ? `Current ready-to-wear sizes are tailored up to ${maxSupportedWeight} kg and cannot accommodate this profile comfortably. Maison VANT welcomes bespoke Made-to-Measure orders tailored to your exact measurements.`
         : 'Due to distinct proportion differences from ready-to-wear patterns, custom bespoke tailoring is recommended for optimal fit and silhouette harmony.',
     };
   }
 
-  // 2. Below Standard Adult Baseline (30kg to 44kg):
-  if (weightKg < 45) {
+  // 2. Below Standard Adult Baseline:
+  const minSupportedWeight = activeSizes.length > 0
+    ? Math.min(...activeSizes.map((s) => s.minWeight))
+    : 45;
+
+  if (weightKg < minSupportedWeight) {
+    const smallestSize = activeSizes[0]?.size || 'XS';
     return {
       status: 'petite_note',
-      size: 'XS',
-      displaySize: 'XS',
+      size: smallestSize as Size,
+      displaySize: smallestSize,
       isBespoke: false,
       confidence: 'close',
-      title_ar: 'مقاس (XS) — قصة واسعة',
-      title_en: 'Size (XS) — Relaxed fit',
-      reason_ar: 'الوزن أقل من 45 كغم لقالب البالغين',
-      reason_en: 'Weight is below adult 45 kg standard',
-      note_ar: 'مقاس (XS) هو أصغر مقاس جاهز للبالغين، وسيكون فضفاضاً وواسعاً نسبياً لأن وزنك تحت 45 كغم. يمكنك ارتداؤه بإطلالة فضفاضة عصرية (Oversized) أو طلب تعديل خياطة مخصص.',
-      note_en: 'Size (XS) is our smallest adult ready-to-wear size, and will drape loosely on builds under 45 kg. It can be styled oversized or custom-altered.',
+      title_ar: `مقاس (${smallestSize}) — قصة واسعة`,
+      title_en: `Size (${smallestSize}) — Relaxed fit`,
+      reason_ar: `الوزن أقل من ${minSupportedWeight} كغم لقالب البالغين`,
+      reason_en: `Weight is below adult ${minSupportedWeight} kg standard`,
+      note_ar: `مقاس (${smallestSize}) هو أصغر مقاس جاهز للبالغين، وسيكون فضفاضاً وواسعاً نسبياً لأن وزنك تحت ${minSupportedWeight} كغم. يمكنك ارتداؤه بإطلالة فضفاضة عصرية (Oversized) أو طلب تعديل خياطة مخصص.`,
+      note_en: `Size (${smallestSize}) is our smallest adult ready-to-wear size, and will drape loosely on builds under ${minSupportedWeight} kg. It can be styled oversized or custom-altered.`,
     };
   }
 
-  // 3. Standard Ready-to-Wear Determination (45kg to 118kg):
-  // Girth (Weight) is the primary foundation so the piece closes and buttons comfortably:
-  let weightBasedSize: Size = 'M';
-  if (weightKg <= 56) {
-    weightBasedSize = 'XS';
-  } else if (weightKg <= 65) {
-    weightBasedSize = 'S';
-  } else if (weightKg <= 75) {
-    weightBasedSize = 'M';
-  } else if (weightKg <= 85) {
-    weightBasedSize = 'L';
-  } else if (weightKg <= 96) {
-    weightBasedSize = 'XL';
-  } else {
-    weightBasedSize = 'XXL';
+  // 3. Dynamic search across active master sizes:
+  // First priority: matching both weight and height
+  let matched = activeSizes.find((s) => weightKg >= s.minWeight && weightKg <= s.maxWeight);
+
+  // If no direct weight match, find the closest active size by weight distance
+  if (!matched && activeSizes.length > 0) {
+    let closestDist = Infinity;
+    for (const s of activeSizes) {
+      const mid = (s.minWeight + s.maxWeight) / 2;
+      const dist = Math.abs(weightKg - mid);
+      if (dist < closestDist) {
+        closestDist = dist;
+        matched = s;
+      }
+    }
   }
 
-  const sizeOrder: Size[] = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-  let finalIndex = sizeOrder.indexOf(weightBasedSize);
+  const selectedMaster = matched || activeSizes[Math.min(2, activeSizes.length - 1)];
+  const sizeIndex = activeSizes.findIndex((s) => s.id === selectedMaster.id);
 
   // 4. Tall & Lean adjustment:
-  const isTallForWeight = (
-    (weightBasedSize === 'XS' && heightCm > 170) ||
-    (weightBasedSize === 'S' && heightCm > 178) ||
-    (weightBasedSize === 'M' && heightCm > 185) ||
-    (weightBasedSize === 'L' && heightCm > 192)
-  );
+  const isTall = heightCm > selectedMaster.maxHeight + 5 && sizeIndex < activeSizes.length - 1;
+  const finalMaster = isTall ? activeSizes[sizeIndex + 1] : selectedMaster;
 
-  if (isTallForWeight && finalIndex < sizeOrder.length - 1) {
-    finalIndex += 1;
-  }
+  const displaySize = finalMaster.size;
+  const reason_ar = isTall
+    ? 'موصى به لطول الأكمام والقامة'
+    : bmi >= 28 && bmi < 40
+    ? 'موصى به لراحة محيط الصدر والخصر'
+    : 'تناسق قياسي متوازن ومريح';
+  const reason_en = isTall
+    ? 'Optimized for height & sleeve length'
+    : bmi >= 28 && bmi < 40
+    ? 'Optimized for torso & chest comfort'
+    : 'Balanced standard luxury fit';
 
-  const recommendedSize = sizeOrder[finalIndex];
-  const matchedRule = DYNAMIC_SIZE_RULES.find((r) => r.size === recommendedSize) || DYNAMIC_SIZE_RULES[2];
-
-  let reason_ar = 'تناسق قياسي متوازن';
-  let reason_en = 'Balanced standard fit';
-  let note_ar = matchedRule.note_ar;
-  let note_en = matchedRule.note_en;
-
-  if (bmi >= 28 && bmi < 40) {
-    reason_ar = 'موصى به لراحة محيط الصدر والخصر';
-    reason_en = 'Optimized for torso & chest comfort';
-    note_ar = `مقاس (${recommendedSize}) يضمن راحة ممتازة على محيط الصدر والخصر مع انسدال فاخر.`;
-    note_en = `Size (${recommendedSize}) guarantees comfortable chest & waist room without constriction.`;
-  } else if (isTallForWeight) {
-    reason_ar = 'موصى به لطول الأكمام والقامة';
-    reason_en = 'Optimized for height & sleeve length';
-    note_ar = `مقاس (${recommendedSize}) يوفر طولاً ملائماً للأكمام والقامة مع الحفاظ على قصة رشيقة.`;
-    note_en = `Size (${recommendedSize}) accommodates sleeve and body length while maintaining silhouette elegance.`;
-  }
+  const note_ar = finalMaster.note_ar || `مقاس (${displaySize}) مناسب للطول والوزن المدخلين مع انسدال عصري مريح.`;
+  const note_en = finalMaster.note_en || `Size (${displaySize}) matches your measurements for an effortless silhouette.`;
 
   return {
     status: 'standard',
-    size: recommendedSize,
-    displaySize: recommendedSize,
+    size: displaySize as Size,
+    displaySize,
     isBespoke: false,
     confidence: 'exact',
-    title_ar: `مقاس (${recommendedSize})`,
-    title_en: `Size (${recommendedSize})`,
+    title_ar: `مقاس (${displaySize})`,
+    title_en: `Size (${displaySize})`,
     reason_ar,
     reason_en,
     note_ar,

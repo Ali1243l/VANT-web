@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Header from './components/Header';
 import CategoryFilter, { type AvailabilityFilterType } from './components/CategoryFilter';
 import WelcomeHeroBanner from './components/WelcomeHeroBanner';
@@ -16,7 +17,7 @@ import { trackEvent } from './lib/analytics';
 import { useProducts } from './hooks/useProducts';
 import { useWishlist } from './hooks/useWishlist';
 import { productMatchesQuery } from './lib/search';
-import { Heart, Loader2 } from 'lucide-react';
+import { Heart, Loader2, Check, X, Sparkles, Gift, Percent, Tag } from 'lucide-react';
 import type { Product, Language, Theme } from './types';
 
 const ALL = 'All';
@@ -72,17 +73,26 @@ function MainApp() {
   });
   const [category, setCategory] = useState(ALL);
   const [isWishlistOnly, setIsWishlistOnly] = useState(false);
+  const [isOffersOnly, setIsOffersOnly] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilterType>('all');
-  const [showWelcomeBanner, setShowWelcomeBanner] = useState(() => {
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+
+  // Clear any old sessionStorage flag on mount so the banner returns fresh and re-opens on refresh
+  useEffect(() => {
     try {
-      return sessionStorage.getItem('vant-banner-dismissed') !== 'true';
-    } catch {
-      return true;
+      sessionStorage.removeItem('vant-banner-dismissed');
+    } catch {}
+  }, []);
+
+  // Guard against any browser horizontal window displacement on category or filter switch
+  useEffect(() => {
+    if (window.scrollX !== 0) {
+      window.scrollTo({ left: 0, top: window.scrollY });
     }
-  });
+  }, [category, availabilityFilter, isOffersOnly]);
 
   // Intersection Observer for Infinite Scrolling to fetch the next batch when reaching bottom
   useEffect(() => {
@@ -132,6 +142,32 @@ function MainApp() {
       return () => clearTimeout(timer);
     }
   }, [searchQuery]);
+
+  // Auto-Apply Coupon & Offer Direct Routing from 1-Click Email Link (?coupon=... & ?filter=offers)
+  const [appliedCouponNotification, setAppliedCouponNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const couponParam = params.get('coupon') || params.get('discount') || params.get('code');
+      const filterParam = params.get('filter') || params.get('tab') || params.get('view');
+      const offerParam = params.get('offer');
+
+      if (filterParam === 'offers' || filterParam === 'sale' || offerParam) {
+        setIsOffersOnly(true);
+      }
+
+      if (couponParam) {
+        const cleanCoupon = couponParam.trim().toUpperCase();
+        try {
+          localStorage.setItem('vant_applied_coupon', cleanCoupon);
+        } catch {}
+        setAppliedCouponNotification(cleanCoupon);
+        const timer = setTimeout(() => setAppliedCouponNotification(null), 8000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
 
   // Secret query parameter listener (?admin)
   useEffect(() => {
@@ -206,9 +242,15 @@ function MainApp() {
     [lang]
   );
 
+  const offersCount = useMemo(() => products.filter((p) => p.is_offer).length, [products]);
+
   // Compute live counts per availability filter
   const availabilityCounts = useMemo(() => {
-    const base = isWishlistOnly ? products.filter((p) => isWishlisted(p.id)) : products;
+    const base = isWishlistOnly
+      ? products.filter((p) => isWishlisted(p.id))
+      : isOffersOnly
+      ? products.filter((p) => p.is_offer)
+      : products;
     const categoryFiltered = category === ALL ? base : base.filter((p) => p.category === category);
     const searchFiltered = searchQuery.trim()
       ? categoryFiltered.filter((p) => productMatchesQuery(p, searchQuery))
@@ -229,11 +271,15 @@ function MainApp() {
     });
 
     return counts;
-  }, [products, isWishlisted, isWishlistOnly, category, searchQuery]);
+  }, [products, isWishlisted, isWishlistOnly, isOffersOnly, category, searchQuery]);
 
-  // Combined Filtering Pipeline: Category -> Wishlist -> Availability -> Search
+  // Combined Filtering Pipeline: Offers -> Wishlist -> Category -> Availability -> Search
   const visible = useMemo(() => {
     return products.filter((p) => {
+      // 0. Offers Only Filter
+      if (isOffersOnly && !p.is_offer) {
+        return false;
+      }
       // 1. Wishlist Only Filter
       if (isWishlistOnly && !isWishlisted(p.id)) {
         return false;
@@ -255,7 +301,35 @@ function MainApp() {
       }
       return true;
     });
-  }, [products, category, wishlist, isWishlistOnly, availabilityFilter, searchQuery]);
+  }, [products, isOffersOnly, category, wishlist, isWishlistOnly, availabilityFilter, searchQuery]);
+
+  // Smoothly scroll window back to the top of the collection whenever category, offers, or availability changes
+  const isFirstMountRef = useRef(true);
+  const prevCategoryFilterRef = useRef({ category, isOffersOnly, availabilityFilter });
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+    const prev = prevCategoryFilterRef.current;
+    if (
+      prev.category !== category ||
+      prev.isOffersOnly !== isOffersOnly ||
+      prev.availabilityFilter !== availabilityFilter
+    ) {
+      prevCategoryFilterRef.current = { category, isOffersOnly, availabilityFilter };
+
+      // Request animation frame to smoothly scroll window to top
+      requestAnimationFrame(() => {
+        if (typeof window !== 'undefined' && window.scrollY > 20) {
+          window.scrollTo({
+            top: 0,
+            behavior: 'smooth',
+          });
+        }
+      });
+    }
+  }, [category, isOffersOnly, availabilityFilter]);
 
   const closeDrawer = useCallback(() => setSelected(null), []);
 
@@ -307,13 +381,52 @@ function MainApp() {
         </>
       ) : (
         <div
-          className={`relative min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden ${
+          className={`relative min-h-[100dvh] w-full max-w-full overflow-x-clip flex flex-col font-sans transition-colors duration-300 ${
             theme === 'dark' ? 'bg-[#0d0f12] text-[#f3f4f6]' : 'bg-[#f8f9fa] text-[#15171c]'
           }`}
         >
       {/* Luxury Ambient Lighting Glow Orbs */}
       <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 h-[520px] w-[850px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,74,215,0.06),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.08),transparent_70%)] blur-3xl animate-luxury-glow" />
       <div className="pointer-events-none absolute top-[40%] ltr:-right-48 rtl:-left-48 h-[400px] w-[400px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.03),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.04),transparent_70%)] blur-3xl" />
+
+      {/* 1-Click Coupon Activation Toast from Email Link */}
+      <AnimatePresence>
+        {appliedCouponNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -25, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.96 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[10000] w-[92%] max-w-md bg-[#0e121b]/95 border border-[#3b82f6]/60 text-white px-4 py-3.5 rounded-2xl shadow-2xl backdrop-blur-2xl flex items-center justify-between gap-3 text-start"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-[#004ad7] to-[#3b82f6] flex items-center justify-center text-white shadow-lg shadow-[#004ad7]/30 shrink-0">
+                <Gift className="h-4.5 w-4.5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold block text-white">
+                  {lang === 'ar' ? 'تم تفعيل كود الخصم الحصري بنجاح!' : 'VIP Discount Code Activated!'}
+                </span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[11px] font-mono font-black text-[#60a5fa] bg-[#004ad7]/20 px-2 py-0.5 rounded-md border border-[#3b82f6]/40">
+                    {appliedCouponNotification}
+                  </span>
+                  <span className="text-[11px] text-zinc-300">
+                    {lang === 'ar' ? 'سارٍ على مشترياتك' : 'applied to your session'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAppliedCouponNotification(null)}
+              className="text-zinc-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Background image preloader for butter-smooth carousel & lookbook exploration */}
       <ImagePreloader products={products} />
@@ -342,26 +455,52 @@ function MainApp() {
           availability={availabilityFilter}
           onAvailabilityChange={setAvailabilityFilter}
           availabilityCounts={availabilityCounts}
+          isOffersOnly={isOffersOnly}
+          onToggleOffersOnly={setIsOffersOnly}
+          offersCount={offersCount}
         />
       </Header>
 
-      {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-7xl flex-1 px-3 sm:px-6 py-4 sm:py-6">
-        {/* Welcome Brand Story Banner with dismiss button */}
-        {showWelcomeBanner && !isWishlistOnly && (
-          <WelcomeHeroBanner
-            lang={lang}
-            isOpen={showWelcomeBanner && !isWishlistOnly}
-            onExplore={() => {
-              document.getElementById('catalog-grid')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            onDismiss={() => {
-              setShowWelcomeBanner(false);
-              sessionStorage.setItem('vant-banner-dismissed', 'true');
-            }}
-            onSelectCategory={setCategory}
-          />
+      {/* Main Content Area: Responsive Fluid Sizing for 16:9 Widescreen & 9:16 Mobile */}
+      <main className="mx-auto w-full max-w-[1920px] flex-1 px-3 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 pt-2 sm:pt-3 md:pt-4 pb-8 sm:pb-12 lg:pb-16 overflow-x-clip">
+        {/* Offers Active Filter Banner (Refined Minimalist Luxury Aesthetic) */}
+        {isOffersOnly && (
+          <div className="mb-5 flex items-center justify-between rounded-2xl border border-black/8 dark:border-white/10 bg-white/70 dark:bg-[#12151e]/80 px-4 py-2.5 sm:px-5 sm:py-3 text-xs sm:text-sm backdrop-blur-xl shadow-xs transition-all">
+            <div className="flex items-center gap-2.5 text-[#15171c] dark:text-white font-medium">
+              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-[#004ad7]/10 dark:bg-[#3b82f6]/15 text-[#004ad7] dark:text-[#3b82f6]">
+                <Tag className="h-3.5 w-3.5 stroke-[2.2]" />
+              </div>
+              <span className="font-semibold tracking-wide">
+                {lang === 'ar'
+                  ? (siteSettings.offers_banner_title_ar || 'العروضات والخصومات')
+                  : (siteSettings.offers_banner_title_en || 'Offers & Discounts')}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsOffersOnly(false)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-[#004ad7] dark:text-[#60a5fa] hover:underline cursor-pointer transition-all"
+            >
+              <span>{lang === 'ar' ? 'عرض التشكيلة الكاملة' : 'View Full Collection'}</span>
+              <X className="h-3.5 w-3.5 opacity-70" />
+            </button>
+          </div>
         )}
+
+        {/* Welcome Brand Story Banner with smooth collapse/expand animations */}
+        <WelcomeHeroBanner
+          lang={lang}
+          isOpen={!isBannerDismissed && (category === ALL || !category || category === 'all') && !isWishlistOnly && !isOffersOnly && !searchQuery.trim()}
+          activeCategory={category}
+          onExplore={() => {
+            document.getElementById('catalog-grid')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          onDismiss={() => {
+            setIsBannerDismissed(true);
+          }}
+          onSelectCategory={setCategory}
+        />
 
         {/* Wishlist Active Filter Banner */}
         {isWishlistOnly && (
@@ -442,6 +581,7 @@ function MainApp() {
             <MasonryGrid
               products={visible}
               loading={loading}
+              loadingMore={loadingMore}
               lang={lang}
               isWishlisted={isWishlisted}
               onToggleWishlist={(id) => {
@@ -472,7 +612,7 @@ function MainApp() {
                   type="button"
                   onClick={() => loadMore()}
                   disabled={loadingMore}
-                  className="inline-flex items-center justify-center gap-2.5 rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] px-8 py-3 text-xs sm:text-sm font-semibold text-[#15171c] dark:text-white shadow-sm hover:border-[#004ad7] dark:hover:border-[#3b82f6] hover:text-[#004ad7] dark:hover:text-[#3b82f6] transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2.5 rounded-full border border-black/10 dark:border-white/15 bg-white dark:bg-[#16191f] px-8 py-3 md:h-13.5 md:px-11 lg:h-14 lg:px-12 text-xs sm:text-sm md:text-base font-bold text-[#15171c] dark:text-white shadow-sm hover:border-[#004ad7] dark:hover:border-[#3b82f6] hover:text-[#004ad7] dark:hover:text-[#3b82f6] transition-all active:scale-95 cursor-pointer disabled:opacity-60"
                   aria-label={lang === 'ar' ? 'تحميل المزيد من التشكيلة' : 'Load more pieces'}
                 >
                   {loadingMore ? (

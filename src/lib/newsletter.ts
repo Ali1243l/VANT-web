@@ -1,4 +1,12 @@
 import { supabase } from './supabase';
+import { uploadImageToSupabase } from './storage';
+import {
+  DEFAULT_CAMPAIGN_TEMPLATES,
+  DEFAULT_STORE_URL,
+  buildUniversalVantEmailHtml,
+  type CampaignTemplateConfig,
+  type EmailRenderParams,
+} from './emailTemplates';
 
 export interface NewsletterSubscriber {
   id: string;
@@ -20,87 +28,100 @@ export interface CampaignOffer {
   body: string;
   created_at: string;
   sent_count: number;
+  template_id?: string;
 }
 
 const STORAGE_KEY = 'vant_subscribers_list_v2';
 const CAMPAIGNS_KEY = 'vant_campaign_offers_v1';
+const CUSTOM_TEMPLATES_KEY = 'vant_custom_email_templates_v1';
+
 const SUPABASE_FILE_PATH = 'config/newsletter_subscribers.json';
 const SUPABASE_CAMPAIGNS_PATH = 'config/newsletter_campaigns.json';
+const SUPABASE_TEMPLATES_PATH = 'config/newsletter_templates.json';
 
 const DEFAULT_SUBSCRIBERS: NewsletterSubscriber[] = [];
 
-export const PRESET_CAMPAIGN_TEMPLATES = [
-  {
-    id: 'tpl_welcome_vip',
-    title: 'رمز ترحيبي حصري · خصم 15%',
-    subject: 'ڤانت للأزياء · رمز ترحيبي حصري وخصم 15% على أول طلب لك',
-    discount_code: 'VANT-WELCOME-15',
-    discount_percent: 15,
-    body: `أهلاً بك في الأرشيف الخاص لـ ڤانت (VANT).
+export { DEFAULT_CAMPAIGN_TEMPLATES as PRESET_CAMPAIGN_TEMPLATES };
 
-يسعدنا انضمامك إلى قائمتنا الحصرية الخاصة بعشاق الخياطة الراقية والأزياء المعمارية الفاخرة.
-يسرنا تقديم رمز الخصم الترحيبي الخاص بك:
-كود الخصم: {DISCOUNT_CODE}
-قيمة الخصم: {DISCOUNT_PERCENT}%
+/**
+ * Get all available campaign templates (default + custom created)
+ */
+export function getStoredCampaignTemplates(): CampaignTemplateConfig[] {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(CUSTOM_TEMPLATES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge presets and custom templates by unique id
+          const map = new Map<string, CampaignTemplateConfig>();
+          DEFAULT_CAMPAIGN_TEMPLATES.forEach((t) => map.set(t.id, t));
+          parsed.forEach((t) => map.set(t.id, t));
+          return Array.from(map.values());
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading custom templates:', e);
+  }
+  return DEFAULT_CAMPAIGN_TEMPLATES;
+}
 
-يمكنك استخدامه فوراً عند الطلب عبر الموقع أو عبر التواصل معنا.
+/**
+ * Save / Add a new custom campaign template to local storage & Supabase
+ */
+export async function saveCampaignTemplate(template: CampaignTemplateConfig): Promise<CampaignTemplateConfig[]> {
+  const current = getStoredCampaignTemplates();
+  const existsIdx = current.findIndex((t) => t.id === template.id);
+  let updated: CampaignTemplateConfig[];
 
-مع خالص التقدير،
-فريق ڤانت للأزياء الحصرية`,
-  },
-  {
-    id: 'tpl_new_drop',
-    title: 'إطلاق كبسولة الشتاء الجديدة',
-    subject: 'حصري للمشتركين · إطلاق كبسولة شتاء 2026 من ڤانت',
-    discount_code: 'WINTER-VIP-20',
-    discount_percent: 20,
-    body: `عزيزنا المشترك في ڤانت،
+  if (existsIdx >= 0) {
+    updated = [...current];
+    updated[existsIdx] = template;
+  } else {
+    updated = [template, ...current];
+  }
 
-يسعدنا إعلامك بإطلاق التشكيلة الجديدة من المعاطف والبدلات الصوفية الإيطالية وتصاميم الأوفرسايز المبتكرة لشتاء 2026.
-بصفتك من مشتركي الأرشيف الخاص، نوفر لك إمكانية الاطلاع المبكر والحجز قبل نفاذ الكميات المحدودة.
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(updated));
+    }
+  } catch {}
 
-كود الخصم الحصري: {DISCOUNT_CODE} (خصم {DISCOUNT_PERCENT}%)
+  if (supabase) {
+    try {
+      const payload = JSON.stringify(updated, null, 2);
+      const blob = new Blob([payload], { type: 'application/json' });
+      await supabase.storage.from('product-images').upload(SUPABASE_TEMPLATES_PATH, blob, {
+        contentType: 'application/json',
+        cacheControl: '0',
+        upsert: true,
+      });
+    } catch (e) {
+      console.warn('Supabase templates cloud sync notice:', e);
+    }
+  }
 
-تصفح التشكيلة الكاملة الآن قبل الإطلاق العام للجمهور.
+  return updated;
+}
 
-ڤانت للأزياء الفاخرة`,
-  },
-  {
-    id: 'tpl_weekend_sale',
-    title: 'عرض نهاية الأسبوع الخاص',
-    subject: 'عرض خاص لـ 48 ساعة فقط · تخفيضات خاصة لمشتركي ڤانت',
-    discount_code: 'FLASH-48H-25',
-    discount_percent: 25,
-    body: `تحية طيبة من ڤانت،
+/**
+ * Delete a custom campaign template
+ */
+export async function deleteCampaignTemplate(templateId: string): Promise<CampaignTemplateConfig[]> {
+  const current = getStoredCampaignTemplates();
+  // Keep defaults, delete only matching
+  const updated = current.filter((t) => t.id !== templateId || DEFAULT_CAMPAIGN_TEMPLATES.some((def) => def.id === templateId));
+  const customOnly = updated.filter((t) => !DEFAULT_CAMPAIGN_TEMPLATES.some((def) => def.id === t.id));
 
-يسرنا دعوتكم للاستفادة من عرض الـ 48 ساعة الخاص بمشتركي النشرة البريدية على قطع مختارة من الكتالوج الرسمي.
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customOnly));
+    }
+  } catch {}
 
-كود الخصم المباشر: {DISCOUNT_CODE}
-نسبة الخصم: {DISCOUNT_PERCENT}% على كامل السلة
-العرض سارٍ حتى نهاية عطلة نهاية الأسبوع أو حتى نفاذ الكميات.
-
-رابط الموقع: {STORE_URL}
-
-دمتم بأناقة راقية،
-فريق مبيعات ڤانت`,
-  },
-  {
-    id: 'tpl_restock_alert',
-    title: 'إشعار توفر القطع الأكثر طلباً',
-    subject: 'عادت للتو · إعادة توفير القطع الأكثر طلباً في ڤانت',
-    discount_code: 'RESTOCK-GIFT',
-    discount_percent: 10,
-    body: `إلى عملائنا الكرام،
-
-بناءً على طلباتكم المتكررة، تمت إعادة توفير القطع الأكثر طلباً من التيشيرتات الأوفرسايز والبدلات الرجالية الفاخرة.
-
-استخدم الرمز: {DISCOUNT_CODE} للحصول على شحن مجاني وخصم إضافي {DISCOUNT_PERCENT}%.
-
-الكميات محدودة جداً ومصنوعة بإصدارات مرقمة.
-
-إدارة الإنتاج والتفصيل · ڤانت`,
-  },
-];
+  return updated;
+}
 
 /**
  * Get all subscribers (cached locally and synced with Supabase Cloud)
@@ -298,21 +319,41 @@ export async function addSubscriber(
 }
 
 /**
- * Delete a subscriber from local cache, Supabase database table and cloud storage
+ * Delete a subscriber/account from local cache, Supabase database table, and cloud storage
  */
 export async function removeSubscriber(idOrEmail: string): Promise<boolean> {
+  const cleanKey = String(idOrEmail || '').trim().toLowerCase();
   const current = getStoredSubscribers();
-  const target = current.find((s) => s.id === idOrEmail || s.email === idOrEmail);
-  const targetEmail = target ? target.email : idOrEmail;
-  const updated = current.filter((s) => s.id !== idOrEmail && s.email !== idOrEmail);
+  const target = current.find(
+    (s) => s.id?.toLowerCase() === cleanKey || s.email.toLowerCase() === cleanKey
+  );
+  const targetEmail = (target ? target.email : cleanKey).toLowerCase().trim();
+  const updated = current.filter(
+    (s) => s.id?.toLowerCase() !== cleanKey && s.email.toLowerCase() !== targetEmail
+  );
+  
+  // 1. Update local storage & cloud storage backup
   const ok = await saveSubscribers(updated);
 
+  // 2. Direct delete from Supabase database table
   if (supabase && targetEmail) {
     try {
-      await supabase.from('newsletter_subscribers').delete().eq('email', targetEmail.toLowerCase().trim());
+      await supabase
+        .from('newsletter_subscribers')
+        .delete()
+        .or(`email.ilike.${targetEmail},id.eq.${cleanKey}`);
     } catch (e) {
-      console.warn('Supabase delete subscriber notice:', e);
+      console.warn('Supabase delete subscriber error/notice:', e);
     }
+
+    // 3. Log deletion audit event
+    try {
+      await supabase.from('logs').insert({
+        action: 'subscriber_account_deleted',
+        details: { email: targetEmail, deleted_at: new Date().toISOString() },
+        created_at: new Date().toISOString(),
+      });
+    } catch {}
   }
   return ok;
 }
@@ -412,6 +453,317 @@ export function generateMailtoLink(
   const bodyParam = encodeURIComponent(body);
 
   return `mailto:atelier@vant-haute.com?bcc=${bccParam}&subject=${subjectParam}&body=${bodyParam}`;
+}
+
+/**
+ * Generate full welcome email links and template
+ */
+export function generateWelcomeEmailMailto(
+  subscriberEmail: string,
+  couponCode: string = 'VANT-WELCOME-15',
+  discountPercent: number = 15,
+  customTitle?: string,
+  customMessage?: string
+): { mailtoUrl: string; webmailGmailUrl: string; subject: string; body: string } {
+  const cleanEmail = subscriberEmail.trim().toLowerCase();
+  const subject = `Welcome to VANT // Access Granted (${couponCode})`;
+  const storeUrl = typeof window !== 'undefined' ? window.location.origin : DEFAULT_STORE_URL;
+
+  const intro = customMessage || 'تم تفعيل اشتراكك بنجاح في القائمة الحصرية لـ ڤانت. يسعدنا تقديم رمز الخصم الترحيبي الخاص بك:';
+
+  const body = `أهلاً بك في ڤانت (VANT).
+
+${intro}
+
+بيانات كود الخصم الترحيبي:
+• كود الخصم: ${couponCode}
+• نسبة الخصم: ${discountPercent}% على طلبك
+• رابط تصفح التشكيلة والطلب: ${storeUrl}
+
+ملاحظات:
+- الكود فعال وفوري للاستخدام عبر الموقع أو بالتواصل المباشر مع فريق المبيعات.
+- يمكنك استخدامه مع أي قطعة من التشكيلة المتوفرة أو التفصيل الخاص.
+
+مع أطيب التحيات،
+فريق ڤانت للأزياء الحصرية`;
+
+  const encodedSubject = encodeURIComponent(subject);
+  const encodedBody = encodeURIComponent(body);
+
+  const mailtoUrl = `mailto:${cleanEmail}?subject=${encodedSubject}&body=${encodedBody}`;
+  const webmailGmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(cleanEmail)}&su=${encodedSubject}&body=${encodedBody}`;
+
+  return { mailtoUrl, webmailGmailUrl, subject, body };
+}
+
+/**
+ * Dispatch any campaign or welcome email with real automated email API and record in Supabase campaign archive
+ */
+export async function dispatchCampaignEmail(params: {
+  recipientEmail: string;
+  template?: CampaignTemplateConfig;
+  customHeadline?: string;
+  customMessage?: string;
+  couponCode?: string;
+  discountPercent?: number;
+  subject?: string;
+  badgeText?: string;
+  heroImage?: string;
+  imageUrl?: string;
+  heroImageUrl?: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  themeColor?: string;
+  editionNote?: string;
+}): Promise<{ success: boolean; emailSent: boolean; subject: string; body: string }> {
+  const cleanEmail = params.recipientEmail.trim().toLowerCase();
+  const tpl = params.template;
+  const storeUrl = typeof window !== 'undefined' ? window.location.origin : DEFAULT_STORE_URL;
+
+  const couponCode = (params.couponCode || tpl?.discountCode || 'VANT-WELCOME-15').toUpperCase();
+  const discountPercent = params.discountPercent ?? tpl?.discountPercent ?? 15;
+  const headline = params.customHeadline || tpl?.headline || 'أهلاً بك في ڤانت // WELCOME TO THE ARCHIVE';
+  const message = params.customMessage || tpl?.message || 'Your exclusive access is granted. Use the code below for your first curation.';
+  const subject = params.subject || tpl?.subject || `Welcome to VANT // Access Granted (${couponCode})`;
+  const badgeText = params.badgeText || tpl?.badgeText || 'CONFIDENTIAL // VIP ACCESS';
+  // Resolve absolute hero image URL (convert any relative Supabase storage paths using getPublicUrl)
+  let rawHero = (params.heroImage || params.imageUrl || params.heroImageUrl || tpl?.heroImage || '').trim();
+  const defaultFallbackImage = 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?fm=jpg&fit=crop&w=1200&q=85';
+  let heroImage = defaultFallbackImage;
+
+  if (rawHero) {
+    if (rawHero.startsWith('http://') || rawHero.startsWith('https://')) {
+      heroImage = rawHero;
+    } else if (!rawHero.startsWith('data:')) {
+      const cleanPath = rawHero.replace(/^\/+/, '').replace(/^product-images\//, '');
+      if (supabase) {
+        const { data } = supabase.storage.from('product-images').getPublicUrl(cleanPath);
+        if (data?.publicUrl && (data.publicUrl.startsWith('http://') || data.publicUrl.startsWith('https://'))) {
+          heroImage = data.publicUrl;
+        } else {
+          heroImage = `https://gjjsdnyfhhbacuciqwbq.supabase.co/storage/v1/object/public/product-images/${cleanPath}`;
+        }
+      } else {
+        heroImage = `https://gjjsdnyfhhbacuciqwbq.supabase.co/storage/v1/object/public/product-images/${cleanPath}`;
+      }
+    }
+  }
+
+  const ctaText = params.ctaText || tpl?.ctaText || 'EXPLORE COLLECTION // تصفح التشكيلة';
+  const ctaUrl = params.ctaUrl || tpl?.ctaUrl || storeUrl;
+  const themeColor = params.themeColor || tpl?.themeColor || '#004ad7';
+  const editionNote = params.editionNote || tpl?.editionNote || 'VANT ARCHIVE // EDITION NO. 01 • STATUS: VIP VERIFIED';
+
+  // 1. Build the luxury HTML
+  const customHtml = buildUniversalVantEmailHtml({
+    customerEmail: cleanEmail,
+    couponCode,
+    discountPercent,
+    headline,
+    message,
+    badgeText,
+    heroImage,
+    imageUrl: heroImage,
+    heroImageUrl: heroImage,
+    ctaText,
+    ctaUrl,
+    themeColor,
+    editionNote,
+    subject,
+  });
+
+  let emailSent = false;
+  const resendApiKey = 're_DgBbp68L_6UUeE8DRtYyyTgFMSrd7qSQo';
+
+  // 2. Dispatch via Serverless Function
+  try {
+    const serverlessRes = await fetch('/api/send-welcome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        couponCode,
+        discountPercent,
+        headline,
+        message,
+        subject,
+        badgeText,
+        heroImage,
+        imageUrl: heroImage,
+        heroImageUrl: heroImage,
+        ctaText,
+        ctaUrl,
+        themeColor,
+        editionNote,
+        html: customHtml,
+      }),
+    });
+
+    if (serverlessRes.ok) {
+      emailSent = true;
+    } else {
+      // Direct Resend API fallback
+      const directRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'VANT Archive <onboarding@resend.dev>',
+          to: [cleanEmail],
+          subject,
+          html: customHtml,
+        }),
+      });
+
+      if (directRes.ok) {
+        emailSent = true;
+      } else {
+        // Fallback for formsubmit
+        const formSubmitRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(cleanEmail)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Origin: 'https://vant.fashion',
+            Referer: 'https://vant.fashion/',
+          },
+          body: JSON.stringify({
+            _subject: subject,
+            _template: 'box',
+            _captcha: 'false',
+            'العلامة_التجارية': 'VANT — دار الأزياء والتصاميم الحصرية',
+            'عنوان_العرض': headline,
+            'تفاصيل_الرسالة': message,
+            'كود_الخصم_الحصري': couponCode,
+            'نسبة_الخصم': `${discountPercent}% على مشترياتك`,
+            'رابط_المتجر_والتسوق': ctaUrl,
+            'البريد_المعتمد': cleanEmail,
+          }),
+        });
+        if (formSubmitRes.ok) {
+          emailSent = true;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Dispatch campaign error:', e);
+  }
+
+  // 3. Record in campaign archive
+  try {
+    await recordCampaign({
+      title: `${tpl?.title || 'حملة بريدية خاصة'} · ${cleanEmail}`,
+      subject,
+      discount_code: couponCode,
+      discount_percent: discountPercent,
+      body: `${headline}\n\n${message}\n\nكود الخصم: ${couponCode} (${discountPercent}%)`,
+      sent_count: 1,
+      template_id: tpl?.id || 'custom',
+    });
+  } catch {}
+
+  return {
+    success: true,
+    emailSent,
+    subject,
+    body: `${headline}\n\n${message}\n\nكود الخصم: ${couponCode}`,
+  };
+}
+
+/**
+ * Dispatch welcome email copy (maintains full compatibility)
+ */
+export async function dispatchWelcomeEmailCopy(
+  subscriberEmail: string,
+  couponCode: string = 'VANT-WELCOME-15',
+  discountPercent: number = 15,
+  title?: string,
+  message?: string,
+  heroImage?: string
+): Promise<{ success: boolean; emailSent: boolean; mailtoUrl: string; webmailGmailUrl: string; subject: string; body: string }> {
+  const cleanEmail = subscriberEmail.trim().toLowerCase();
+  const { mailtoUrl, webmailGmailUrl, subject, body } = generateWelcomeEmailMailto(
+    cleanEmail,
+    couponCode,
+    discountPercent,
+    title,
+    message
+  );
+
+  const res = await dispatchCampaignEmail({
+    recipientEmail: cleanEmail,
+    couponCode,
+    discountPercent,
+    customHeadline: title,
+    customMessage: message,
+    subject,
+    heroImage,
+  });
+
+  return {
+    success: res.success,
+    emailSent: res.emailSent,
+    mailtoUrl,
+    webmailGmailUrl,
+    subject,
+    body,
+  };
+}
+
+/**
+ * Upload campaign image file to Supabase cloud storage (bucket: product-images)
+ * First compresses large camera/mobile photos down to lightweight email-optimized size (<300KB, max 1200px)
+ */
+export async function uploadCampaignImageFile(file: File): Promise<string> {
+  try {
+    // 1. If file is larger than 1MB or from mobile camera, compress it first using canvas
+    let fileToUpload: File | Blob = file;
+    if (typeof window !== 'undefined' && file.size > 300 * 1024) {
+      try {
+        const { fileToOptimizedDataUrl } = await import('./storage');
+        const compressedDataUrl = await fileToOptimizedDataUrl(file, 1200, 1400, 0.85);
+        if (compressedDataUrl && compressedDataUrl.startsWith('data:')) {
+          const [header, base64] = compressedDataUrl.split(',');
+          const mimeMatch = header.match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const binary = atob(base64);
+          const array = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            array[i] = binary.charCodeAt(i);
+          }
+          const blob = new Blob([array], { type: mime });
+          const safeName = file.name.replace(/\.[^/.]+$/, '') + (mime === 'image/webp' ? '.webp' : '.jpg');
+          fileToUpload = new File([blob], safeName, { type: mime });
+        }
+      } catch (compErr) {
+        console.warn('Canvas compression notice:', compErr);
+      }
+    }
+
+    const uploadedUrl = await uploadImageToSupabase(fileToUpload as File, 'newsletter-banners');
+    if (uploadedUrl && !uploadedUrl.startsWith('data:')) {
+      const supabaseUrl =
+        (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
+        'https://gjjsdnyfhhbacuciqwbq.supabase.co';
+      const cleanPath = uploadedUrl.replace(/^\/+/, '');
+      const finalPath = cleanPath.startsWith('product-images') ? cleanPath : `product-images/${cleanPath}`;
+      return `${supabaseUrl}/storage/v1/object/public/${finalPath}`;
+    }
+
+    // 2. If Supabase returned a data: URL or failed, upload to free public CDN
+    const { uploadToFreeCdn } = await import('./storage');
+    const freeCdnUrl = await uploadToFreeCdn(fileToUpload);
+    if (freeCdnUrl && (freeCdnUrl.startsWith('http://') || freeCdnUrl.startsWith('https://'))) {
+      return freeCdnUrl;
+    }
+  } catch (err) {
+    console.warn('Upload image notice:', err);
+  }
+
+  // Fallback: If for any reason all uploads fail, use public reliable CDN URL
+  return 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?fm=jpg&fit=crop&w=1200&q=85';
 }
 
 /**

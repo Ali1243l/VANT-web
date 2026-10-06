@@ -8,6 +8,34 @@ export interface UploadedMediaItem {
 }
 
 /**
+ * Fallback to public fast image CDN for 100% email client compatibility
+ */
+export async function uploadToFreeCdn(fileOrBlob: Blob | File): Promise<string | null> {
+  try {
+    const formData = new FormData();
+    formData.append('source', fileOrBlob);
+    formData.append('key', '6d207e02198a847aa98d0a2a901485a5');
+    formData.append('action', 'upload');
+    formData.append('format', 'json');
+
+    const res = await fetch('https://freeimage.host/api/1/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.image?.url) {
+        console.log('✓ Uploaded image to public CDN:', data.image.url);
+        return data.image.url;
+      }
+    }
+  } catch (e) {
+    console.warn('Free CDN upload notice:', e);
+  }
+  return null;
+}
+
+/**
  * Optimizes and compresses any image File into a high-definition Data URL
  * Scales down massive phone camera images (e.g. 10MB/4000px) to max 1400px width/height
  * while preserving high-end luxury color depth and sharpness.
@@ -135,6 +163,8 @@ export interface CloudSiteConfig {
   trendItems?: any[];
   socialLinks?: any[];
   enhancements?: Record<string, any>;
+  site_settings?: Record<string, any>;
+  sizeGuideRows?: any[];
   hero_bg?: string;
   banner_hero_bg?: string;
   updated_at?: string;
@@ -143,10 +173,29 @@ export interface CloudSiteConfig {
 // In-memory cache of cloud configuration to ensure instant synchronous access and perfect merging
 let cachedCloudConfig: CloudSiteConfig | null = null;
 
+const SUPABASE_PROJECT_ID = 'gjjsdnyfhhbacuciqwbq';
+const SUPABASE_STORAGE_ORIGIN = `https://${SUPABASE_PROJECT_ID}.supabase.co`;
+
+/**
+ * Formats and guarantees a fully qualified absolute Supabase Storage public URL:
+ * https://[PROJECT_ID].supabase.co/storage/v1/object/public/[BUCKET]/[PATH]
+ */
+export function formatSupabasePublicUrl(pathOrUrl: string, bucket: string = 'product-images'): string {
+  if (!pathOrUrl) return '';
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  let cleanPath = pathOrUrl.replace(/^\/+/, '');
+  if (cleanPath.startsWith(`${bucket}/`)) {
+    cleanPath = cleanPath.slice(bucket.length + 1);
+  }
+  return `${SUPABASE_STORAGE_ORIGIN}/storage/v1/object/public/${bucket}/${cleanPath}`;
+}
+
 /**
  * Uploads an image File directly to Supabase Storage bucket `product-images`
  * Preserves custom organized subpaths (e.g., `banners/`, `catalog/`, `trends/`)
- * Returns the permanent public Supabase URL.
+ * Returns the permanent fully-qualified public Supabase URL.
  */
 export async function uploadImageToSupabase(
   file: File,
@@ -193,10 +242,12 @@ export async function uploadImageToSupabase(
           .from('product-images')
           .getPublicUrl(data.path);
 
-        if (publicData?.publicUrl) {
-          console.log('✓ Successfully uploaded image to Supabase Storage:', publicData.publicUrl);
-          return publicData.publicUrl;
-        }
+        const absoluteUrl = (publicData?.publicUrl && publicData.publicUrl.startsWith('http'))
+          ? publicData.publicUrl
+          : formatSupabasePublicUrl(data.path, 'product-images');
+
+        console.log('✓ Successfully uploaded image to Supabase Storage (Absolute URL):', absoluteUrl);
+        return absoluteUrl;
       } else if (error) {
         console.error('Supabase storage upload error:', error.message);
       }
@@ -212,7 +263,7 @@ export async function uploadImageToSupabase(
 
 /**
  * Uploads a base64 Data URL to Supabase Storage as a real file
- * and returns the permanent public Supabase URL.
+ * and returns the permanent fully-qualified public Supabase URL.
  */
 export async function uploadDataUrlToSupabase(
   dataUrl: string,
@@ -252,10 +303,12 @@ export async function uploadDataUrlToSupabase(
         .from('product-images')
         .getPublicUrl(data.path);
 
-      if (pubData?.publicUrl) {
-        console.log('✓ Converted Data URL to permanent Supabase Storage URL:', pubData.publicUrl);
-        return pubData.publicUrl;
-      }
+      const absoluteUrl = (pubData?.publicUrl && pubData.publicUrl.startsWith('http'))
+        ? pubData.publicUrl
+        : formatSupabasePublicUrl(data.path, 'product-images');
+
+      console.log('✓ Converted Data URL to permanent Supabase Storage URL (Absolute):', absoluteUrl);
+      return absoluteUrl;
     }
   } catch (err) {
     console.warn('Failed to upload Data URL to Supabase Storage:', err);
@@ -299,6 +352,7 @@ export async function saveSiteConfigToSupabase(config: Partial<CloudSiteConfig>)
       },
       trendItems: config.trendItems || existing?.trendItems || [],
       socialLinks: config.socialLinks || existing?.socialLinks || [],
+      sizeGuideRows: config.sizeGuideRows || existing?.sizeGuideRows || [],
       hero_bg: bannerBg,
       banner_hero_bg: bannerBg,
       updated_at: new Date().toISOString(),

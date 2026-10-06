@@ -95,36 +95,36 @@ export default function ShareModal({ isOpen, onClose, product, lang }: ShareModa
           transition={{ type: 'spring', damping: 28, stiffness: 400 }}
           role="dialog"
           aria-modal="true"
-          className="relative z-10 w-full max-w-[315px] sm:max-w-[335px] rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-[#181b22] p-3.5 sm:p-4 shadow-xl text-[#15171c] dark:text-[#f3f4f6]"
+          className="relative z-10 w-full max-w-[315px] sm:max-w-[335px] md:max-w-[380px] rounded-2xl md:rounded-[24px] border border-black/10 dark:border-white/15 bg-white dark:bg-[#181b22] p-3.5 sm:p-4 md:p-5 shadow-xl text-[#15171c] dark:text-[#f3f4f6]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/10">
-            <span className="text-xs font-semibold text-[#15171c] dark:text-white">
+          <div className="flex items-center justify-between pb-2 md:pb-2.5 border-b border-black/5 dark:border-white/10">
+            <span className="text-xs md:text-sm font-bold text-[#15171c] dark:text-white">
               {isAr ? 'نسخ ومشاركة الرابط' : 'Copy & Share Link'}
             </span>
 
             <button
               type="button"
               onClick={onClose}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              className="flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
               aria-label={isAr ? 'إغلاق' : 'Close'}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5 md:h-4 md:w-4" />
             </button>
           </div>
 
           {/* Simple Standard Copy-Link Box */}
-          <div className="mt-3 flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-white/[0.04] p-1.5">
+          <div className="mt-3 md:mt-3.5 flex items-center gap-1.5 md:gap-2 rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.03] dark:bg-white/[0.04] p-1.5 md:p-2">
             <input
               type="text"
               readOnly
               value={shareUrl}
-              className="flex-1 bg-transparent px-2 text-xs text-[#6b7280] dark:text-[#9ca3af] outline-none select-all truncate"
+              className="flex-1 bg-transparent px-2 md:px-2.5 text-xs md:text-sm text-[#6b7280] dark:text-[#9ca3af] outline-none select-all truncate"
             />
             <button
               type="button"
               onClick={handleCopyLink}
-              className={`flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
+              className={`flex shrink-0 items-center gap-1 md:gap-1.5 rounded-lg px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-bold transition-all active:scale-95 cursor-pointer ${
                 copied
                   ? 'bg-[#004ad7] dark:bg-[#3b82f6] text-white shadow-2xs'
                   : 'bg-[#15171c] dark:bg-white text-white dark:text-[#15171c] hover:opacity-90'
@@ -132,12 +132,12 @@ export default function ShareModal({ isOpen, onClose, product, lang }: ShareModa
             >
               {copied ? (
                 <>
-                  <Check className="h-3.5 w-3.5" />
+                  <Check className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   <span>{isAr ? 'تم النسخ!' : 'Copied!'}</span>
                 </>
               ) : (
                 <>
-                  <Copy className="h-3.5 w-3.5" />
+                  <Copy className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   <span>{isAr ? 'نسخ' : 'Copy'}</span>
                 </>
               )}
@@ -145,12 +145,12 @@ export default function ShareModal({ isOpen, onClose, product, lang }: ShareModa
           </div>
 
           {/* Quick Share Actions */}
-          <div className="mt-2.5 flex items-center gap-1.5">
+          <div className="mt-2.5 md:mt-3 flex items-center gap-1.5 md:gap-2">
             {/* WhatsApp */}
             <button
               type="button"
               onClick={handleWhatsAppShare}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] hover:bg-[#25D366]/10 hover:border-[#25D366]/30 hover:text-[#128C7E] dark:hover:text-[#25D366] py-1.5 text-[11px] font-medium transition-colors cursor-pointer"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-black/8 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] hover:bg-[#25D366]/10 hover:border-[#25D366]/30 hover:text-[#128C7E] dark:hover:text-[#25D366] py-1.5 md:py-2.5 text-[11px] md:text-xs font-semibold transition-colors cursor-pointer"
             >
               <MessageCircle className="h-3.5 w-3.5" />
               <span>{isAr ? 'واتساب' : 'WhatsApp'}</span>
