@@ -389,7 +389,8 @@ export default function NewsletterSection({ lang }: Props) {
               <button
                 type="button"
                 onClick={() => setShowWelcomeModal(false)}
-                className="absolute top-4 ltr:right-4 rtl:left-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors cursor-pointer"
+                className="absolute top-4 ltr:right-4 rtl:left-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                aria-label={isAr ? 'إغلاق نافذة الترحيب' : 'Close welcome modal'}
               >
                 <X className="h-4 w-4" />
               </button>

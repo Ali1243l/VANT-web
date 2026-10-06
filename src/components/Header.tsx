@@ -136,7 +136,7 @@ export default function Header({
                 <button
                   type="button"
                   onClick={handleClear}
-                  className={`absolute flex h-6 w-6 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 hover:text-[#15171c] dark:hover:text-white transition-colors ${
+                  className={`absolute flex h-6 w-6 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 hover:text-[#15171c] dark:hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:focus-visible:ring-white/20 ${
                     lang === 'ar' ? 'left-2' : 'right-2'
                   }`}
                   aria-label={lang === 'ar' ? 'مسح البحث' : 'Clear search'}
@@ -149,7 +149,7 @@ export default function Header({
             <button
               type="button"
               onClick={handleClose}
-              className="shrink-0 px-2.5 py-1 text-[13px] font-medium text-[#6b7280] dark:text-[#9ca3af] hover:text-[#15171c] dark:hover:text-white transition-colors"
+              className="shrink-0 px-2.5 py-1 text-[13px] font-medium text-[#6b7280] dark:text-[#9ca3af] hover:text-[#15171c] dark:hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:focus-visible:ring-white/20 rounded-md"
             >
               {lang === 'ar' ? 'إلغاء' : 'Cancel'}
             </button>

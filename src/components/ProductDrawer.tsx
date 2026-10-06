@@ -662,7 +662,7 @@ export default function ProductDrawer({ product, loading, lang, onClose }: Props
               <button
                 type="button"
                 onClick={onClose}
-                className="absolute top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 dark:bg-[#0d0f12]/80 text-[#15171c] dark:text-white backdrop-blur-md shadow-xs border border-black/5 dark:border-white/10 transition-all hover:bg-white dark:hover:bg-[#0d0f12] active:scale-95 ltr:right-4 rtl:left-4 cursor-pointer"
+                className="absolute top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 dark:bg-[#0d0f12]/80 text-[#15171c] dark:text-white backdrop-blur-md shadow-xs border border-black/5 dark:border-white/10 transition-all hover:bg-white dark:hover:bg-[#0d0f12] active:scale-95 ltr:right-4 rtl:left-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#004ad7] dark:focus-visible:ring-[#3b82f6]"
                 aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
               >
                 <X className="h-4 w-4" />

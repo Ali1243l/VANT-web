@@ -106,7 +106,7 @@ export default function ShareModal({ isOpen, onClose, product, lang }: ShareModa
             <button
               type="button"
               onClick={onClose}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[#6b7280] dark:text-[#9ca3af] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:focus-visible:ring-white/20"
               aria-label={isAr ? 'إغلاق' : 'Close'}
             >
               <X className="h-3.5 w-3.5" />
