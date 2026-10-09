@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowDown, ChevronLeft, ChevronRight, ArrowUpRight, Sparkles } from 'lucide-react';
 import type { Language } from '../types';
@@ -120,6 +120,67 @@ export default function WelcomeHeroBanner({
   const bgImage = heroBgControl.actionValue || backgroundImageUrl;
   const activeTrendsList = trendItems && trendItems.length > 0 ? trendItems : FEATURED_TRENDS;
   const trendsCount = activeTrendsList.length;
+
+  // Determine if trend items overflow container, to center them when few/fitting, or start from edges when many/overflowing
+  const [hasOverflow, setHasOverflow] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const count = activeTrendsList.length;
+    const isMobile = window.innerWidth < 640;
+    const isTablet = window.innerWidth < 1024;
+    const itemWidth = isMobile ? 136 + 10 : isTablet ? 184 + 14 : 200 + 16;
+    const approxContentWidth = count * itemWidth;
+    const approxContainerWidth = window.innerWidth - (isMobile ? 32 : 80);
+    return approxContentWidth > approxContainerWidth;
+  });
+
+  const checkOverflow = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const children = Array.from(el.children) as HTMLElement[];
+    if (children.length === 0) {
+      setHasOverflow(false);
+      return;
+    }
+
+    let totalContentWidth = 0;
+    children.forEach((child) => {
+      totalContentWidth += child.offsetWidth;
+    });
+
+    const style = window.getComputedStyle(el);
+    const gap = parseFloat(style.gap) || (window.innerWidth >= 768 ? 16 : window.innerWidth >= 640 ? 14 : 10);
+    totalContentWidth += Math.max(0, children.length - 1) * gap;
+
+    const availableWidth = el.clientWidth;
+    // Overflows if total width exceeds available container width by more than 4px
+    const overflows = totalContentWidth > availableWidth + 4;
+    setHasOverflow(overflows);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    checkOverflow();
+
+    const rafId = requestAnimationFrame(checkOverflow);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        checkOverflow();
+      });
+      ro.observe(el);
+    }
+
+    window.addEventListener('resize', checkOverflow);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', checkOverflow);
+    };
+  }, [activeTrendsList, checkOverflow]);
 
   const scrollTrends = (direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
@@ -261,8 +322,12 @@ export default function WelcomeHeroBanner({
                   </span>
                 </div>
 
-                {/* Tactile Horizontal Navigation Arrows */}
-                <div className="flex items-center gap-1.5">
+                {/* Tactile Horizontal Navigation Arrows (visible when items overflow) */}
+                <div
+                  className={`flex items-center gap-1.5 transition-opacity duration-300 ${
+                    hasOverflow ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => scrollTrends('left')}
@@ -287,7 +352,9 @@ export default function WelcomeHeroBanner({
               {/* Smooth Carousel Runway Cards */}
               <div
                 ref={scrollContainerRef}
-                className="flex items-center justify-start gap-2.5 sm:gap-3.5 md:gap-4 overflow-x-auto no-scrollbar scroll-smooth pb-1 pt-0.5"
+                className={`flex items-center gap-2.5 sm:gap-3.5 md:gap-4 overflow-x-auto no-scrollbar scroll-smooth pb-1 pt-0.5 transition-all duration-300 ${
+                  hasOverflow ? 'justify-start' : 'justify-center'
+                }`}
               >
                 {activeTrendsList.map((trend) => (
                   <div
